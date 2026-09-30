@@ -83,29 +83,21 @@ const TOOLTIP_OFFSET_Y = 20;
 // thing that has to be read.
 const TOOLTIP_BAND_ALPHA = 0.30;
 
-// The luminance an event's colour has to stay inside before it is used as a
-// band, on a dark tooltip and then on a light one. The luminance is the WCAG
-// relative luminance of the colour, 0 for black and 1 for white, not the
-// brightness the eye guesses from the RGB values; see luminance().
+// The luminance at which an event's colour would be too close to the tooltip's
+// own surface to be seen there at all -- below this on a dark tooltip, above
+// this on a light one. The luminance is the WCAG relative luminance of the
+// colour, 0 for black and 1 for white, not the brightness the eye guesses from
+// the RGB values; see luminance().
 //
-// A band is not read, so it is held to much looser bounds than the text on it
-// would be: all it has to do is be told apart from the surface it lies on. That
-// is what lets an event's band be the colour the calendar gave it -- the same
-// colour as its dot in the grid -- rather than a pale version of it. Two things
-// would spoil that, one at each end. A colour too close to the surface
-// disappears into it; a colour too bright turns the row into a light panel, and
-// the text on top stops reading against it. Either way the colour is moved
-// toward the other end in quarter-steps, which keeps its hue: a dark red stays
-// red, it just becomes a red that can be seen.
-//
-// The desklet's own background is about 0.03, and the text written over a band
-// is about 0.72, which is what fixes the ceiling: a band at 0.30 puts the text
-// at a contrast ratio near 4.7:1 against it, and the rows are large text by
-// then anyway. On a white tooltip the bounds swap ends -- there the danger is a
-// pale event colour vanishing into the surface, so the ceiling is much higher
-// and there is no floor to clear.
+// These are the only bounds a band has, and they are deliberately at the far
+// end of the scale. A band is not read, so it does not have to clear the
+// contrast the text on it does, and the whole point of it is that an event's
+// row is the colour of its dot in the grid. The surface is about 0.03 on a
+// dark tooltip and 0.90 on a light one, so a bound at 0.10 and 0.50 is reached
+// only by a colour that genuinely cannot be seen there -- a near-black
+// calendar colour on the dark tooltip, a near-white one on the light. Every
+// other colour is used exactly as the calendar gives it.
 const TOOLTIP_BAND_MIN_LUMINANCE = 0.10;
-const TOOLTIP_BAND_MAX_LUMINANCE = 0.30;
 const TOOLTIP_BAND_LIGHT_MAX_LUMINANCE = 0.50;
 
 // Sizes that have to track the desklet's text size, in ems of the root font.
@@ -315,31 +307,27 @@ const BAND_MAX_STEPS = 8;
 /**
  * An event's colour as the band behind its own row in the tooltip, or null if
  * it is not a colour. `dark` says whether the tooltip's surface is dark, which
- * decides which end of the scale the bounds are at; see the constants above for
- * what they are for.
+ * decides which end of the scale the one bound is at; see the constants above.
  *
- * A colour already inside its bounds comes back untouched -- which is most of
- * them, and is the point: an event's band is the colour it has in the grid.
- *
- * The moves are quarter-steps to preserve the hue. Blending toward white
- * flattens the differences between the channels, so a saturated red arrives at
- * pink in the end either way; it gets there in eight smaller moves rather than
- * one, and a colour that only just misses is moved just enough.
+ * Almost every colour comes back untouched -- that is the point, since the band
+ * is meant to be the colour of the event's dot in the grid, and the opacity it
+ * is drawn at is what makes it a background. Only a colour close enough to the
+ * surface to disappear into it is moved, and then by quarter-steps, which
+ * preserve the hue: on the way to white a saturated red flattens to pink in the
+ * end either way, and it gets there in eight smaller moves rather than one.
  */
 function bandColor(color, dark) {
     const rgb = parseColor(color);
     if (!rgb) return null;
 
     const lum = (c) => luminance(c[0], c[1], c[2]);
-    const floor = dark ? TOOLTIP_BAND_MIN_LUMINANCE : 0;
-    const ceiling = dark ? TOOLTIP_BAND_MAX_LUMINANCE : TOOLTIP_BAND_LIGHT_MAX_LUMINANCE;
+    const target = dark ? [255, 255, 255] : [0, 0, 0];
+    const bound = dark ? TOOLTIP_BAND_MIN_LUMINANCE : TOOLTIP_BAND_LIGHT_MAX_LUMINANCE;
+    const vanishes = (c) => (dark ? lum(c) < bound : lum(c) > bound);
 
     let out = rgb;
-    for (let step = 0; step < BAND_MAX_STEPS && lum(out) < floor; step++) {
-        out = blend(out, dark ? [255, 255, 255] : [0, 0, 0], 0.25);
-    }
-    for (let step = 0; step < BAND_MAX_STEPS && lum(out) > ceiling; step++) {
-        out = blend(out, dark ? [0, 0, 0] : [255, 255, 255], 0.25);
+    for (let step = 0; step < BAND_MAX_STEPS && vanishes(out); step++) {
+        out = blend(out, target, 0.25);
     }
     return toHex(out);
 }

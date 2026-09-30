@@ -379,14 +379,13 @@ Two consequences worth knowing before editing it:
   it sits on. Written into the text it was a different colour on every row, and
   a red event came out as red letters on a red band — muddy exactly where it
   had to be read.
-- **Each row's band is checked against the tooltip's own surface first.** The
-  tooltip is drawn in the desklet's background colour, and an event colour too
-  close to it is moved away until it can be told apart — lightened on a dark
-  tooltip, darkened on a light one — in quarter-steps, so it keeps its hue. A
-  colour that already stands out is left exactly as it is, which is most of
-  them: an event's band is the colour of its dot in the grid. A ceiling as well
-  as a floor, because a band bright enough to fight the text on it has stopped
-  being a background. See `bandColor()`.
+- **Each row's band is the event's colour exactly as the grid draws it** — the
+  same value as the dot, at a third of its strength so it reads as a
+  background. The one exception is a colour so close to the tooltip's own
+  surface that it would not show up there at all: that one is moved away in
+  quarter-steps, which keeps its hue. On a dark tooltip that means a
+  near-black calendar colour, and on a light one a near-white; nothing else is
+  touched. See `bandColor()`.
 - **It is sized from the desklet's text size**, not the theme's. The tooltip
   hangs in the uiGroup, outside the desklet's actor, so nothing the desklet
   sets reaches it — without this it would render at the theme default beside
