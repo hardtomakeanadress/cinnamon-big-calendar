@@ -19,7 +19,7 @@ there is nothing to log into and no password to give it.
   Microsoft, CalDAV, or a local one. Shown as coloured dots, coloured bars, or
   the event titles themselves — whichever fits your desktop.
 - **Hover tooltips** headed by the date, listing that day's events with their
-  start times, each row on a band of its own calendar's colour.
+  start times, each row filled with its own calendar's colour.
 - **Paging** through months with the arrows or the scroll wheel, and the month
   you were on is remembered for next time. Whenever you are looking at some
   other month, a **Today** button appears in the header to bring you back.
@@ -367,25 +367,24 @@ the grid. So the day tooltip is its own small actor (`DayTooltip` in
 the same wait before it appears, the same offset beside the pointer, and the
 same flipping at the edge of the monitor so it never opens off-screen.
 
-Two consequences worth knowing before editing it:
+Things worth knowing before editing it:
 
 - **It lives in `Main.uiGroup`, not in the desklet.** It has to be able to hang
   over the edge of the calendar, and the desklet's own actor is clipped to its
   bounds. Nothing takes it down with the desklet, so `on_desklet_removed()`
   destroys it explicitly, and every render hides it — the cells it describes
   are about to be replaced.
-- **The colour is the band, not the text.** A row's text is the one colour
-  known to read on the tooltip's surface; the event's own colour is the ground
-  it sits on. Written into the text it was a different colour on every row, and
-  a red event came out as red letters on a red band — muddy exactly where it
-  had to be read.
-- **Each row's band is the event's colour exactly as the grid draws it** — the
-  same value as the dot, at a third of its strength so it reads as a
-  background. The one exception is a colour so close to the tooltip's own
-  surface that it would not show up there at all: that one is moved away in
-  quarter-steps, which keeps its hue. On a dark tooltip that means a
-  near-black calendar colour, and on a light one a near-white; nothing else is
-  touched. See `bandColor()`.
+- **A row is filled with the event's colour — the dot's exact colour, not a
+  tint of it.** Fill, not text: written into the text it was a different colour
+  on every line, and a red event came out as red letters on a red ground, muddy
+  exactly where it had to be read. Filled, a row's background is the same value
+  the grid paints the dot with, and the pixels are identical.
+- **So the text on a row is chosen per row**, which is the one place in the
+  desklet where a text colour cannot be settled once for the whole surface —
+  each row is a different colour. Black or white, whichever has more contrast
+  against that row; the crossover is a luminance of about 0.18. See `textOn()`.
+  Nothing adjusts the event's colour to suit the tooltip: a filled row does not
+  need contrast against the surface behind it, because its own edges define it.
 - **It is sized from the desklet's text size**, not the theme's. The tooltip
   hangs in the uiGroup, outside the desklet's actor, so nothing the desklet
   sets reaches it — without this it would render at the theme default beside

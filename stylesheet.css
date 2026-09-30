@@ -226,12 +226,14 @@
     padding: 0.45em;
 }
 
-/* One event: its own colour as the band behind it. Set inline, since it comes
- * from that event's calendar. The rows stretch to the width of the widest, so
- * the bands read as one column rather than as strips of different lengths. */
+/* One event: filled with its own colour, set inline from that event's
+ * calendar. The rows stretch to the width of the widest, so they read as one
+ * column rather than as strips as long as their own text, and the gap below
+ * keeps two events that share a colour from merging into a single block. */
 .bigcal-tip-row {
     padding: 0.18em 0.7em;
     border-radius: 4px;
+    margin-bottom: 0.12em;
 }
 
 /* The date, and the "+N more" count: no colour of their own, so their colour

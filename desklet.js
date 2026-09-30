@@ -77,28 +77,17 @@ const TOOLTIP_SHOW_MS = 300;
 const TOOLTIP_OFFSET_X = 14;
 const TOOLTIP_OFFSET_Y = 20;
 
-// How opaque an event's colour is when it is used as the band behind its own
-// row in the tooltip. Strong enough that the colour is what the eye catches,
-// weak enough to stay a background -- the text sits on top of it and is the
-// thing that has to be read.
-const TOOLTIP_BAND_ALPHA = 0.30;
-
-// The luminance at which an event's colour would be too close to the tooltip's
-// own surface to be seen there at all -- below this on a dark tooltip, above
-// this on a light one. The luminance is the WCAG relative luminance of the
-// colour, 0 for black and 1 for white, not the brightness the eye guesses from
-// the RGB values; see luminance().
+// A row is filled with the event's colour at full strength, so it is the same
+// colour as the dot in the grid -- not a tint of it, and not a version of it
+// adjusted until it can be read. What makes it a row rather than a block of
+// colour is the text on it, which is why that text is chosen per row: see
+// textOn(). Nothing here is changed to suit the tooltip's surface, because a
+// filled row does not need the surface to see it -- its edges define it.
 //
-// These are the only bounds a band has, and they are deliberately at the far
-// end of the scale. A band is not read, so it does not have to clear the
-// contrast the text on it does, and the whole point of it is that an event's
-// row is the colour of its dot in the grid. The surface is about 0.03 on a
-// dark tooltip and 0.90 on a light one, so a bound at 0.10 and 0.50 is reached
-// only by a colour that genuinely cannot be seen there -- a near-black
-// calendar colour on the dark tooltip, a near-white one on the light. Every
-// other colour is used exactly as the calendar gives it.
-const TOOLTIP_BAND_MIN_LUMINANCE = 0.10;
-const TOOLTIP_BAND_LIGHT_MAX_LUMINANCE = 0.50;
+// This was a wash at 30% for a while, so that one text colour would read on
+// every row. It read, but the row was then a blend of the colour with the
+// tooltip rather than the colour, which is not what a colour picked in Online
+// Accounts is for.
 
 // Sizes that have to track the desklet's text size, in ems of the root font.
 //
@@ -270,10 +259,10 @@ function toHex(rgb) {
     ).join("");
 }
 
-/** A calendar colour at `alpha`, as an rgba() for an inline style. */
-function rgbaOf(hex, alpha) {
-    const rgb = parseColor(hex);
-    return rgb ? "rgba(" + rgb.join(", ") + ", " + alpha + ")" : hex;
+/** A calendar colour as a #rrggbb string, or null if it is not a colour. */
+function solid(color) {
+    const rgb = parseColor(color);
+    return rgb ? toHex(rgb) : null;
 }
 
 /**
@@ -299,37 +288,23 @@ function blend(from, to, amount) {
     return from.map((c, i) => c + (to[i] - c) * amount);
 }
 
-// How many quarter-steps a colour may be moved before it is given up on. Eight
-// reaches 90% of the way to the opposite end, which is more than enough for a
-// colour that started at black.
-const BAND_MAX_STEPS = 8;
-
 /**
- * An event's colour as the band behind its own row in the tooltip, or null if
- * it is not a colour. `dark` says whether the tooltip's surface is dark, which
- * decides which end of the scale the one bound is at; see the constants above.
+ * The colour to write a row in when that row is filled with `hex`: whichever of
+ * black and white has more contrast against it, or null if `hex` is not a
+ * colour.
  *
- * Almost every colour comes back untouched -- that is the point, since the band
- * is meant to be the colour of the event's dot in the grid, and the opacity it
- * is drawn at is what makes it a background. Only a colour close enough to the
- * surface to disappear into it is moved, and then by quarter-steps, which
- * preserve the hue: on the way to white a saturated red flattens to pink in the
- * end either way, and it gets there in eight smaller moves rather than one.
+ * A filled row is the only place in the desklet whose text colour cannot be
+ * settled once for the whole surface, because the row is a different colour on
+ * every line. The two candidates are black and white rather than anything
+ * softer: on a colour that is doing the work of being bright, the text has one
+ * job, which is to be read. The crossover is where the two have the same
+ * contrast ratio, at a luminance of about 0.18 -- below that the row is dark
+ * enough that white reads better on it, above it black does.
  */
-function bandColor(color, dark) {
-    const rgb = parseColor(color);
+function textOn(hex) {
+    const rgb = parseColor(hex);
     if (!rgb) return null;
-
-    const lum = (c) => luminance(c[0], c[1], c[2]);
-    const target = dark ? [255, 255, 255] : [0, 0, 0];
-    const bound = dark ? TOOLTIP_BAND_MIN_LUMINANCE : TOOLTIP_BAND_LIGHT_MAX_LUMINANCE;
-    const vanishes = (c) => (dark ? lum(c) < bound : lum(c) > bound);
-
-    let out = rgb;
-    for (let step = 0; step < BAND_MAX_STEPS && vanishes(out); step++) {
-        out = blend(out, target, 0.25);
-    }
-    return toHex(out);
+    return luminance(rgb[0], rgb[1], rgb[2]) < 0.179 ? "#ffffff" : "#000000";
 }
 
 /* ---------------------------------------------------------------- *
@@ -338,7 +313,7 @@ function bandColor(color, dark) {
 
 /**
  * The tooltip that opens on hover over a day: the date, then a row per event,
- * each on a band of that event's own colour from the grid.
+ * each filled with that event's own colour from the grid.
  *
  * It is not Cinnamon's Tooltips.Tooltip. That is a single St.Label and can
  * carry exactly one colour, and the whole point of this tooltip is that a
@@ -390,8 +365,8 @@ class DayTooltip {
         const rgb = parseColor(color) || [48, 48, 54];
         this._dark = luminance(rgb[0], rgb[1], rgb[2]) < 0.5;
         // Every row's text: the surface's own colour pushed nearly all the way
-        // to the other end, so it reads both on the bare surface and on a band
-        // -- which is the harder of the two, and so is what it is sized for.
+        // to the other end, so it reads on the bare surface. The rows that are
+        // filled with an event's colour do not use it -- see textOn().
         // It is not a colour the desklet's settings do not know about, only
         // the surface taken to where text belongs.
         this._plain = toHex(blend(rgb, this._dark ? [255, 255, 255] : [0, 0, 0], 0.85));
@@ -486,29 +461,28 @@ class DayTooltip {
     }
 
     /**
-     * Fill the tooltip in: a label per row, on a band if the row carries a
-     * colour and on the bare surface if it does not.
+     * Fill the tooltip in: a label per row, filled with the event's colour if
+     * the row carries one and left on the bare surface if it does not.
      *
-     * The colour is the band, not the text. Written into the text it was a
-     * different colour on every row, and on a red event that meant red letters
+     * The colour is the row, not the text. Written into the text it was a
+     * different colour on every line, and on a red event that meant red letters
      * on a red ground -- the row went muddy exactly where the eye needed to
-     * read it. As a band the event keeps its colour, the text stays the one
-     * colour that is known to read on this surface, and a day's events are
-     * still told apart at a glance.
+     * read it. Filled, the row is the colour the calendar was given, the same
+     * one the dot in the grid uses, and the text on it is chosen to read
+     * against that colour rather than to match it.
      */
     _build(rows) {
         for (const child of this._actor.get_children()) child.destroy();
 
         for (const row of rows) {
-            const band = bandColor(row.color, this._dark);
-            const style_class = band ? "bigcal-tip-row"
+            const fill = solid(row.color);
+            const style_class = fill ? "bigcal-tip-row"
                 : (row.date ? "bigcal-tip-plain bigcal-tip-date" : "bigcal-tip-plain");
 
             const label = new St.Label({ text: row.text, style_class: style_class });
-            label.set_style("color: " + this._plain + ";" + (band
-                ? " background-color: " + rgbaOf(band, TOOLTIP_BAND_ALPHA) + ";"
-                : ""));
-            // Filled across the box, so the bands line up as one column rather
+            label.set_style("color: " + (fill ? textOn(fill) : this._plain) + ";" +
+                (fill ? " background-color: " + fill + ";" : ""));
+            // Filled across the box, so the rows line up as one column rather
             // than as strips as long as their own text.
             this._actor.add(label, { x_fill: true, x_align: St.Align.FILL });
         }
