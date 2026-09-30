@@ -164,11 +164,33 @@ const LAST_VIEW_KEY = "last-view";
  *
  * Both fields of the timestamp are needed. Seconds alone would miss two edits
  * inside one second, which is easy to do while working on a file.
+ *
+ * Reading the stamp is asynchronous, like every other read this desklet makes.
+ * A stat() is short, but short is not a property the main loop can rely on
+ * when the file is on a network mount, and this runs in the compositor. The
+ * binding does not promise-wrap query_info_async on its own, and Gio's
+ * _promisify() would patch the prototype for every desklet in the session, so
+ * the callback is wrapped by hand -- the same way calendarSource.js wraps the
+ * EDS registry.
+ *
+ * A file that cannot be read at all stamps as 0 rather than throwing: the
+ * stamp only has to differ when the file does, and a module that is missing is
+ * about to fail its import loudly.
  */
-function moduleStamp(file) {
+async function moduleStamp(file) {
     try {
-        const info = Gio.File.new_for_path(file).query_info(
-            "time::modified,time::modified-usec", Gio.FileQueryInfoFlags.NONE, null);
+        const info = await new Promise((resolve, reject) => {
+            Gio.File.new_for_path(file).query_info_async(
+                "time::modified,time::modified-usec",
+                Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, null,
+                (source, result) => {
+                    try {
+                        resolve(source.query_info_finish(result));
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+        });
         return info.get_attribute_uint64("time::modified") * 1000000 +
             info.get_attribute_uint32("time::modified-usec");
     } catch (e) {
@@ -187,19 +209,28 @@ function moduleStamp(file) {
  * while the files are, so two instances of the desklet still share one copy.
  */
 async function loadModules(path) {
-    const uri = (name) => {
+    const uri = async (name) => {
         const file = path + "/lib/" + name;
-        return GLib.filename_to_uri(file, null) + "?v=" + moduleStamp(file);
+        return GLib.filename_to_uri(file, null) + "?v=" + await moduleStamp(file);
     };
 
+    // The three stamps first, then the imports: a URI has to be settled before
+    // the module it names is fetched, or the stamp is asking after a file that
+    // has already been read.
+    const [utilsUri, indexUri, sourceUri] = await Promise.all([
+        uri("calendarUtils.js"),
+        uri("eventIndex.js"),
+        uri("calendarSource.js")
+    ]);
+
     const [utils, index] = await Promise.all([
-        import(uri("calendarUtils.js")),
-        import(uri("eventIndex.js"))
+        import(utilsUri),
+        import(indexUri)
     ]);
 
     let source = null;
     try {
-        source = await import(uri("calendarSource.js"));
+        source = await import(sourceUri);
     } catch (e) {
         logError(e, "Big Calendar: event support unavailable");
     }
