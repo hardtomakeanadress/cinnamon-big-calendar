@@ -9,7 +9,17 @@ import { listCalendars, CalendarFeed } from '../lib/calendarSource.js';
 import { buildEventIndex, eventsOnDay, describeEvent } from '../lib/eventIndex.js';
 
 const loop = new GLib.MainLoop(null, false);
-GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 30, () => { print("TIMEOUT"); loop.quit(); return GLib.SOURCE_REMOVE; });
+let failure = null;
+
+// A real failure, not a note. GJS drives the main context to resolve the
+// awaits below, so this can fire while a step is stuck -- and it used to print
+// TIMEOUT and exit 0, which is the one outcome a watchdog must not have.
+GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 30, () => {
+    printerr("TIMEOUT: a step never returned");
+    failure = new Error("timed out after 30s");
+    loop.quit();
+    return GLib.SOURCE_REMOVE;
+});
 
 try {
     const calendars = await listCalendars();
@@ -51,6 +61,29 @@ try {
     feed.destroy();
     print("\ndestroy() ok, isOpen=" + feed.isOpen);
 } catch (e) {
-    print("FAILED: " + e.message + "\n" + (e.stack || ""));
+    // Kept and re-thrown below, so a run that read the wrong thing cannot be
+    // mistaken for a run that read the right one by anything that only looks
+    // at the exit status.
+    printerr("FAILED: " + e.message + "\n" + (e.stack || ""));
+    failure = e;
 }
+
+// Collect the calendar clients before leaving, then leave through GLib.
+//
+// destroy() drops this side's references to the ECal clients, but dropping a
+// reference is not the same as closing the connection: GJS keeps the objects
+// until a collection, and EDS keeps a D-Bus connection and a main-context
+// source open until they are finalized. Exit with them still live and the
+// process dies on the way out -- a silent segfault, no message, status 139.
+// That is why the loop below quits as soon as it starts rather than waiting
+// for the context to run dry: it never would. The last line of a passing run
+// used to say TIMEOUT for exactly that reason.
+imports.system.gc();
+
+GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { loop.quit(); return GLib.SOURCE_REMOVE; });
 loop.run();
+
+// Thrown, not system.exit()'d: the exit code has to say whether the readings
+// above were right, and a non-zero one is the only way this script can say
+// they were not.
+if (failure) throw failure;
