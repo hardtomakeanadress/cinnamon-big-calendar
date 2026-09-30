@@ -280,6 +280,7 @@ cjs -m tests/integration.js       # reads the real evolution-data-server on this
 ./tools/make-icon.py              # redraw icon.png from its script rather than editing the image
 ./tools/make-pot.sh               # regenerate po/bigCalendar@adis.pot
 ./tools/make-dist.sh              # build dist/bigCalendar@adis.zip to install elsewhere
+./tools/make-spice.sh             # build dist/spice/ to open a pull request against the Cinnamon Spices repo
 ```
 
 The first four need no desktop to run — they import `lib/` directly and skip
