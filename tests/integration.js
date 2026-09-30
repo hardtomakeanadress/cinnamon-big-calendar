@@ -12,7 +12,7 @@ const loop = new GLib.MainLoop(null, false);
 GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 30, () => { print("TIMEOUT"); loop.quit(); return GLib.SOURCE_REMOVE; });
 
 try {
-    const calendars = listCalendars();
+    const calendars = await listCalendars();
     print("calendars found: " + calendars.length);
     for (const c of calendars) print("   " + c.name.padEnd(30) + " " + c.color);
 

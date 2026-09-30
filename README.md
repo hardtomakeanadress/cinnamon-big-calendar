@@ -108,7 +108,10 @@ Concretely:
   service is what actually talks to Google, refreshing tokens and caching
   results for offline use — exactly as it already does for the Calendar
   application and for GNOME's clock. The desklet is a reader of data that is on
-  your machine already. It does its own date arithmetic on what comes back:
+  your machine already. **Every call it makes is asynchronous**, so nothing it
+  asks for can freeze the desktop while it waits — not even if
+  `evolution-data-server` is wedged. It does its own date arithmetic on what
+  comes back:
   `evolution-data-server` returns a repeating event as the single rule that
   defines it, not as the individual occurrences, so the desklet expands the
   rule itself (see `lib/calendarSource.js`).
@@ -246,17 +249,6 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
 These are real and worth knowing before you rely on the desklet.
 
-- **The calendar list is read with one blocking call.** Obtaining the list of
-  calendars uses `EDataServer.SourceRegistry.new_sync`, because the
-  introspection binding this environment provides does not export
-  `new_async` — there is no non-blocking way to reach it. Measured inside the
-  running Cinnamon process, the first call takes about 9 ms and later calls
-  about 5 µs, since the registry connection is then cached; it runs once when
-  the desklet starts or reloads. So on a healthy system it is a momentary
-  hitch, not a freeze — but it is a synchronous call on the compositor's
-  thread, and if `evolution-source-registry` is hung the desktop blocks with
-  it until it answers. Everything else — every actual event read — is
-  asynchronous.
 - **All calendars are shown, with no per-calendar filter.** There is no way yet
   to hide, say, a birthday calendar while keeping your work one. The
   `show-events` setting is all-or-nothing.
