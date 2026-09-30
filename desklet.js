@@ -77,27 +77,36 @@ const TOOLTIP_SHOW_MS = 300;
 const TOOLTIP_OFFSET_X = 14;
 const TOOLTIP_OFFSET_Y = 20;
 
-// How opaque an event's colour is when it is used as the wash behind its own
-// row in the tooltip. Low enough to stay a background: the text of the row is
-// the same colour at full strength, and it has to dominate its own band.
-const TOOLTIP_BAND_ALPHA = 0.22;
+// How opaque an event's colour is when it is used as the band behind its own
+// row in the tooltip. Strong enough that the colour is what the eye catches,
+// weak enough to stay a background -- the text sits on top of it and is the
+// thing that has to be read.
+const TOOLTIP_BAND_ALPHA = 0.30;
 
-// The luminance an event's colour has to reach -- at least this much on a dark
-// tooltip, at most this much on a light one -- before it is written there as
-// it is. The luminance is the WCAG relative luminance of the colour, 0 for
-// black and 1 for white, not the brightness the eye guesses from the RGB
-// values; see luminance().
+// The luminance an event's colour has to stay inside before it is used as a
+// band, on a dark tooltip and then on a light one. The luminance is the WCAG
+// relative luminance of the colour, 0 for black and 1 for white, not the
+// brightness the eye guesses from the RGB values; see luminance().
 //
-// These are contrast floors, and they are what stops a calendar that colours
-// an event near-black from writing a row nobody can read. A colour that misses
-// its floor is moved toward the other end in quarter-steps, which keeps its
-// hue: a dark red stays red, it just becomes a red that can be read.
+// A band is not read, so it is held to much looser bounds than the text on it
+// would be: all it has to do is be told apart from the surface it lies on. That
+// is what lets an event's band be the colour the calendar gave it -- the same
+// colour as its dot in the grid -- rather than a pale version of it. Two things
+// would spoil that, one at each end. A colour too close to the surface
+// disappears into it; a colour too bright turns the row into a light panel, and
+// the text on top stops reading against it. Either way the colour is moved
+// toward the other end in quarter-steps, which keeps its hue: a dark red stays
+// red, it just becomes a red that can be seen.
 //
-// The desklet's own background is about 0.03, so 0.35 is a contrast ratio
-// around 4.6:1 against it; the same maths on a white tooltip puts 0.18 at
-// about 4.4:1.
-const TOOLTIP_MIN_LUMINANCE = 0.35;
-const TOOLTIP_MAX_LUMINANCE = 0.18;
+// The desklet's own background is about 0.03, and the text written over a band
+// is about 0.72, which is what fixes the ceiling: a band at 0.30 puts the text
+// at a contrast ratio near 4.7:1 against it, and the rows are large text by
+// then anyway. On a white tooltip the bounds swap ends -- there the danger is a
+// pale event colour vanishing into the surface, so the ceiling is much higher
+// and there is no floor to clear.
+const TOOLTIP_BAND_MIN_LUMINANCE = 0.10;
+const TOOLTIP_BAND_MAX_LUMINANCE = 0.30;
+const TOOLTIP_BAND_LIGHT_MAX_LUMINANCE = 0.50;
 
 // Sizes that have to track the desklet's text size, in ems of the root font.
 //
@@ -222,27 +231,43 @@ async function loadModules(path) {
  * ---------------------------------------------------------------- */
 
 /**
- * A #rrggbb or #rgb string as [r, g, b], or null for anything else.
+ * A calendar colour as [r, g, b], or null for anything else.
  *
- * Only those two forms are accepted, and that is the point rather than a
- * convenience: these values arrive from the calendar as strings and end up
- * pasted into inline CSS, so anything carrying a quote or a semicolon would
- * end the declaration early and leave the rest to be parsed as more CSS. A
- * calendar colour is a hex triplet, so the test costs nothing, and anything
- * else is refused rather than trusted.
+ * Two forms are accepted, because evolution-data-server hands back both: a
+ * hex triplet, and `rgb(r, g, b)`. Which one a calendar gets is not up to the
+ * desklet -- Google's come through as hex and others do not, and a colour in
+ * the form that was not expected reads as no colour at all, which is how a
+ * calendar's events came to be drawn in the grid but written plain in the
+ * tooltip.
+ *
+ * Matching tightly is the point rather than a convenience: these values arrive
+ * from the calendar as strings and end up in inline CSS, so anything carrying
+ * a quote or a semicolon would end the declaration early and leave the rest to
+ * be parsed as more CSS. And the numbers are read out and the colour rebuilt
+ * from them -- the string itself is never passed on -- so even a value that
+ * matched could not put anything of its own into the style.
  */
-function parseHex(value) {
-    const hex = String(value === null || value === undefined ? "" : value).trim();
-    if (/^#[0-9a-f]{6}$/i.test(hex)) {
-        return [parseInt(hex.substr(1, 2), 16),
-                parseInt(hex.substr(3, 2), 16),
-                parseInt(hex.substr(5, 2), 16)];
+function parseColor(value) {
+    const text = String(value === null || value === undefined ? "" : value).trim();
+
+    if (/^#[0-9a-f]{6}$/i.test(text)) {
+        return [parseInt(text.substr(1, 2), 16),
+                parseInt(text.substr(3, 2), 16),
+                parseInt(text.substr(5, 2), 16)];
     }
-    if (/^#[0-9a-f]{3}$/i.test(hex)) {
-        return [parseInt(hex[1] + hex[1], 16),
-                parseInt(hex[2] + hex[2], 16),
-                parseInt(hex[3] + hex[3], 16)];
+    if (/^#[0-9a-f]{3}$/i.test(text)) {
+        return [parseInt(text[1] + text[1], 16),
+                parseInt(text[2] + text[2], 16),
+                parseInt(text[3] + text[3], 16)];
     }
+
+    const rgb = text.match(
+        /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$/i);
+    if (rgb) {
+        const parts = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+        if (parts.every((c) => c <= 255)) return parts;
+    }
+
     return null;
 }
 
@@ -253,9 +278,9 @@ function toHex(rgb) {
     ).join("");
 }
 
-/** A #rrggbb colour at `alpha`, as an rgba() for an inline style. */
+/** A calendar colour at `alpha`, as an rgba() for an inline style. */
 function rgbaOf(hex, alpha) {
-    const rgb = parseHex(hex);
+    const rgb = parseColor(hex);
     return rgb ? "rgba(" + rgb.join(", ") + ", " + alpha + ")" : hex;
 }
 
@@ -285,35 +310,36 @@ function blend(from, to, amount) {
 // How many quarter-steps a colour may be moved before it is given up on. Eight
 // reaches 90% of the way to the opposite end, which is more than enough for a
 // colour that started at black.
-const LEGIBLE_MAX_STEPS = 8;
+const BAND_MAX_STEPS = 8;
 
 /**
- * `color` moved as little as it takes to be readable on a surface, or null if
- * it is not a colour. `dark` says whether that surface is dark, which decides
- * both the direction of travel and the floor to clear.
+ * An event's colour as the band behind its own row in the tooltip, or null if
+ * it is not a colour. `dark` says whether the tooltip's surface is dark, which
+ * decides which end of the scale the bounds are at; see the constants above for
+ * what they are for.
  *
- * A colour that already clears its floor comes back untouched -- which is most
- * of them, and is the point: an event keeps the colour it has in the grid
- * unless that colour would be invisible here.
+ * A colour already inside its bounds comes back untouched -- which is most of
+ * them, and is the point: an event's band is the colour it has in the grid.
  *
- * The steps are quarter-steps to preserve the hue. Blending toward white
+ * The moves are quarter-steps to preserve the hue. Blending toward white
  * flattens the differences between the channels, so a saturated red arrives at
  * pink in the end either way; it gets there in eight smaller moves rather than
- * one, and a colour that only just misses is lifted just enough.
+ * one, and a colour that only just misses is moved just enough.
  */
-function legible(color, dark) {
-    const rgb = parseHex(color);
+function bandColor(color, dark) {
+    const rgb = parseColor(color);
     if (!rgb) return null;
 
-    const target = dark ? [255, 255, 255] : [0, 0, 0];
-    const clears = (c) => {
-        const l = luminance(c[0], c[1], c[2]);
-        return dark ? l >= TOOLTIP_MIN_LUMINANCE : l <= TOOLTIP_MAX_LUMINANCE;
-    };
+    const lum = (c) => luminance(c[0], c[1], c[2]);
+    const floor = dark ? TOOLTIP_BAND_MIN_LUMINANCE : 0;
+    const ceiling = dark ? TOOLTIP_BAND_MAX_LUMINANCE : TOOLTIP_BAND_LIGHT_MAX_LUMINANCE;
 
     let out = rgb;
-    for (let step = 0; step < LEGIBLE_MAX_STEPS && !clears(out); step++) {
-        out = blend(out, target, 0.25);
+    for (let step = 0; step < BAND_MAX_STEPS && lum(out) < floor; step++) {
+        out = blend(out, dark ? [255, 255, 255] : [0, 0, 0], 0.25);
+    }
+    for (let step = 0; step < BAND_MAX_STEPS && lum(out) > ceiling; step++) {
+        out = blend(out, dark ? [0, 0, 0] : [255, 255, 255], 0.25);
     }
     return toHex(out);
 }
@@ -323,8 +349,8 @@ function legible(color, dark) {
  * ---------------------------------------------------------------- */
 
 /**
- * The tooltip that opens on hover over a day: one row per event, each written
- * in that event's own colour on a wash of the same colour, and then the date.
+ * The tooltip that opens on hover over a day: the date, then a row per event,
+ * each on a band of that event's own colour from the grid.
  *
  * It is not Cinnamon's Tooltips.Tooltip. That is a single St.Label and can
  * carry exactly one colour, and the whole point of this tooltip is that a
@@ -365,16 +391,25 @@ class DayTooltip {
      * light, and the event colours are darkened instead of lightened. Called
      * on every render, so a change of background is picked up by the next
      * hover.
+     *
+     * `fontSize` is the same text size the cells are drawn at, in points. It
+     * has to be handed in: the tooltip lives in the uiGroup, outside the
+     * desklet's actor, so nothing the desklet sets reaches it and it would
+     * otherwise render at the theme's default -- a size nobody picked, next to
+     * day numbers twice as tall.
      */
-    setSurface(color) {
-        const rgb = parseHex(color) || [48, 48, 54];
+    setSurface(color, fontSize) {
+        const rgb = parseColor(color) || [48, 48, 54];
         this._dark = luminance(rgb[0], rgb[1], rgb[2]) < 0.5;
-        // The date and "+N" rows: the surface's own colour pushed most of the
-        // way to the other end, so they read as secondary to the events
-        // without being a colour the desklet's settings do not know about.
-        this._plain = toHex(blend(rgb, this._dark ? [255, 255, 255] : [0, 0, 0], 0.72));
+        // Every row's text: the surface's own colour pushed nearly all the way
+        // to the other end, so it reads both on the bare surface and on a band
+        // -- which is the harder of the two, and so is what it is sized for.
+        // It is not a colour the desklet's settings do not know about, only
+        // the surface taken to where text belongs.
+        this._plain = toHex(blend(rgb, this._dark ? [255, 255, 255] : [0, 0, 0], 0.85));
 
-        this._actor.set_style("background-color: " + toHex(rgb) + ";");
+        this._actor.set_style("background-color: " + toHex(rgb) + ";" +
+            (fontSize ? " font-size: " + fontSize + "pt;" : ""));
     }
 
     /**
@@ -463,21 +498,28 @@ class DayTooltip {
     }
 
     /**
-     * Fill the tooltip in: a label per row, coloured if the row carries a
-     * colour and plain if it does not.
+     * Fill the tooltip in: a label per row, on a band if the row carries a
+     * colour and on the bare surface if it does not.
+     *
+     * The colour is the band, not the text. Written into the text it was a
+     * different colour on every row, and on a red event that meant red letters
+     * on a red ground -- the row went muddy exactly where the eye needed to
+     * read it. As a band the event keeps its colour, the text stays the one
+     * colour that is known to read on this surface, and a day's events are
+     * still told apart at a glance.
      */
     _build(rows) {
         for (const child of this._actor.get_children()) child.destroy();
 
         for (const row of rows) {
-            const color = legible(row.color, this._dark);
-            const style_class = color ? "bigcal-tip-row"
+            const band = bandColor(row.color, this._dark);
+            const style_class = band ? "bigcal-tip-row"
                 : (row.date ? "bigcal-tip-plain bigcal-tip-date" : "bigcal-tip-plain");
 
             const label = new St.Label({ text: row.text, style_class: style_class });
-            label.set_style(color
-                ? "color: " + color + "; background-color: " + rgbaOf(color, TOOLTIP_BAND_ALPHA) + ";"
-                : "color: " + this._plain + ";");
+            label.set_style("color: " + this._plain + ";" + (band
+                ? " background-color: " + rgbaOf(band, TOOLTIP_BAND_ALPHA) + ";"
+                : ""));
             // Filled across the box, so the bands line up as one column rather
             // than as strips as long as their own text.
             this._actor.add(label, { x_fill: true, x_align: St.Align.FILL });
@@ -825,7 +867,7 @@ class BigCalendarDesklet extends Desklet.Desklet {
 
         this._clearTable();
         this._applyRootStyle();
-        this._dayTip.setSurface(this.bgColor);
+        this._dayTip.setSurface(this.bgColor, this._basePoints());
         this._renderTitle();
         // The label widths memoised during the last render were measured
         // against the font size that has just been replaced.
@@ -1322,8 +1364,18 @@ class BigCalendarDesklet extends Desklet.Desklet {
         // first render builds every node before this size has been handed
         // down. So no length that matters is written in ems; they are all
         // converted to pixels by _emToPx() and set in JS.
-        const points = 11 * (this.fontScale / 100);
-        this._root.set_style(css + " font-size: " + points.toFixed(1) + "pt;");
+        this._root.set_style(css + " font-size: " + this._basePoints() + "pt;");
+    }
+
+    /**
+     * The desklet's text size in points, from the scale setting.
+     *
+     * One place, because two things are sized from it and they have to agree:
+     * the root, whose font every cell inherits, and the tooltip, which sits in
+     * the uiGroup outside the desklet and inherits nothing.
+     */
+    _basePoints() {
+        return (11 * (this.fontScale / 100)).toFixed(1);
     }
 
     /** Optional 1px rule around every cell. */

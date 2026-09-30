@@ -19,7 +19,7 @@ there is nothing to log into and no password to give it.
   Microsoft, CalDAV, or a local one. Shown as coloured dots, coloured bars, or
   the event titles themselves — whichever fits your desktop.
 - **Hover tooltips** headed by the date, listing that day's events with their
-  start times, each row written in its own calendar's colour.
+  start times, each row on a band of its own calendar's colour.
 - **Paging** through months with the arrows or the scroll wheel, and the month
   you were on is remembered for next time. Whenever you are looking at some
   other month, a **Today** button appears in the header to bring you back.
@@ -382,12 +382,23 @@ Two consequences worth knowing before editing it:
   bounds. Nothing takes it down with the desklet, so `on_desklet_removed()`
   destroys it explicitly, and every render hides it — the cells it describes
   are about to be replaced.
-- **Each row's colour is checked against the tooltip's own surface before it is
-  written.** The tooltip is drawn in the desklet's background colour, and an
-  event whose colour is dark is lightened until it clears a contrast floor
-  (and darkened on a light background); a colour that already clears it is left
-  exactly as it is. That is what stops a calendar that colours an event
-  near-black from writing a row nobody can read. See `legible()`.
+- **The colour is the band, not the text.** A row's text is the one colour
+  known to read on the tooltip's surface; the event's own colour is the ground
+  it sits on. Written into the text it was a different colour on every row, and
+  a red event came out as red letters on a red band — muddy exactly where it
+  had to be read.
+- **Each row's band is checked against the tooltip's own surface first.** The
+  tooltip is drawn in the desklet's background colour, and an event colour too
+  close to it is moved away until it can be told apart — lightened on a dark
+  tooltip, darkened on a light one — in quarter-steps, so it keeps its hue. A
+  colour that already stands out is left exactly as it is, which is most of
+  them: an event's band is the colour of its dot in the grid. A ceiling as well
+  as a floor, because a band bright enough to fight the text on it has stopped
+  being a background. See `bandColor()`.
+- **It is sized from the desklet's text size**, not the theme's. The tooltip
+  hangs in the uiGroup, outside the desklet's actor, so nothing the desklet
+  sets reaches it — without this it would render at the theme default beside
+  day numbers twice as tall.
 
 ### Translating
 
