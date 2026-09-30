@@ -1,0 +1,11 @@
+# The release archive is a build artefact: it is attached to a release and
+# built from the tree by tools/make-dist.sh, so it is not committed.
+dist/
+
+# Screenshots other than the one the README uses, from ./shot.sh.
+/shot-*.png
+/out.png
+
+# Python leaves these behind when the tools/ scripts are run.
+__pycache__/
+*.pyc
