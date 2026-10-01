@@ -48,8 +48,9 @@ function assertEqual(actual, expected, label) {
 }
 
 let CalendarFeed;
+let dedupeOccurrences;
 try {
-    ({ CalendarFeed } = await import("../lib/calendarSource.js"));
+    ({ CalendarFeed, dedupeOccurrences } = await import("../lib/calendarSource.js"));
 } catch (e) {
     print("");
     print("  Big Calendar desklet -- feed tests");
@@ -146,6 +147,58 @@ await testAsync("a calendar whose account was removed is dropped", async () => {
     await feed._openAll(registryOf(["still-there"]));
 
     assertEqual(feed.calendars.map(c => c.uid), ["still-there"], "only the live one");
+});
+
+/* ---------------------------------------------------------------- */
+
+const EV = (uid, start, calendar) => ({
+    uid, start, end: start + 3600000, allDay: false,
+    summary: "s", color: "#fff", calendar: calendar || "c"
+});
+
+test("the same event from two calendars is drawn once", () => {
+    // The case that prompted this: one calendar name, one colour, two dots on
+    // the same day, because the calendar was subscribed twice.
+    const once = dedupeOccurrences([
+        EV("holiday-1", 1000, "Holidays"),
+        EV("holiday-1", 1000, "Holidays")
+    ]);
+    assertEqual(once.length, 1, "one dot, not two");
+    assertEqual(once[0].uid, "holiday-1", "the surviving one is the event");
+});
+
+test("a shared event keeps the calendar it was seen in first", () => {
+    const once = dedupeOccurrences([
+        EV("standup", 1000, "Work"),
+        EV("standup", 1000, "Team")
+    ]);
+    assertEqual(once.map(e => e.calendar), ["Work"], "first one wins");
+});
+
+test("every occurrence of a repeating event survives", () => {
+    // Same UID, different starts: these are the series, not copies of it.
+    const all = dedupeOccurrences([
+        EV("weekly", 1000), EV("weekly", 2000), EV("weekly", 3000)
+    ]);
+    assertEqual(all.length, 3, "all three occurrences");
+});
+
+test("two different events at the same instant both survive", () => {
+    const both = dedupeOccurrences([EV("a", 1000), EV("b", 1000)]);
+    assertEqual(both.length, 2, "neither is a copy of the other");
+});
+
+test("an event with no uid is never treated as a duplicate", () => {
+    // Nothing to compare, and dropping one would lose a real event.
+    const both = dedupeOccurrences([
+        EV(null, 1000), EV(null, 1000), EV(undefined, 1000)
+    ]);
+    assertEqual(both.length, 3, "all kept");
+});
+
+test("input order is otherwise preserved", () => {
+    const out = dedupeOccurrences([EV("a", 3), EV("b", 1), EV("a", 3), EV("c", 2)]);
+    assertEqual(out.map(e => e.uid), ["a", "b", "c"], "stable, duplicates gone");
 });
 
 /* ---------------------------------------------------------------- */

@@ -17,7 +17,9 @@ there is nothing to log into and no password to give it.
   American), and weekends tinted in their own colour.
 - **Your events**, from every calendar in Online Accounts: Google, Nextcloud,
   Microsoft, CalDAV, or a local one. Shown as coloured dots, coloured bars, or
-  the event titles themselves — whichever fits your desktop.
+  the event titles themselves — whichever fits your desktop. An event that
+  arrives from more than one calendar — a shared invitation, or a calendar
+  subscribed twice — is drawn once; it is one thing happening once.
 - **Hover tooltips** headed by the date, listing that day's events with their
   start times, each row filled with its own calendar's colour.
 - **Paging** through months with the arrows or the scroll wheel, and the month
