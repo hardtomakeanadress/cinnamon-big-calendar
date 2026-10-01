@@ -361,6 +361,23 @@ given that what it races is someone moving a window and then clicking in it. A
 below the desklet and covers the whole screen, and a dock has its own claim on
 the region.
 
+Holding the region is necessary but not sufficient, because something else can
+be lying on top of the desklet and taking the events first. Cinnamon flashes a
+light over a desklet's rectangle every time the desklet is added to the desktop.
+That flash is a `Lightbox`, and a `Lightbox`'s actor is an `St.Bin` built with
+`reactive: params.inhibitEvents` — true, for a flashspot. It takes itself down
+in the `onComplete` of its own ease, and when that callback does not run, what
+is left is an actor at opacity 0 that is still mapped, still reactive and still
+exactly on top of the desklet. The desklet then answers nothing: no hover, no
+tooltips, no scroll. It looks like the input region being lost, and it is not —
+the region is held, and the events are being delivered into a sheet of glass.
+
+`_clearStuckFlashspot()` runs on the same 200 ms tick and hides any flashspot
+that both overlaps the desklet and has already faded to nothing. Only at opacity
+zero, because at any other value the flash is still going and clearing it would
+be wrong; hidden rather than destroyed, because that is enough to stop it being
+picked and it leaves Cinnamon's own object alone.
+
 ### The day tooltip is not Cinnamon's
 
 `Tooltips.Tooltip` is a single `St.Label`, so it can carry exactly one colour —
