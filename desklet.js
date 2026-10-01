@@ -1661,6 +1661,25 @@ class BigCalendarDesklet extends Desklet.Desklet {
     on_desklet_removed() {
         this._destroyed = true;
 
+        // Give up the input region here, and stop being reactive, rather than
+        // leaving both to the actor's destruction.
+        //
+        // Cinnamon does destroy the actor, but only after this returns and only
+        // if it returns: Desklet.destroy() nulls the menu, starts a fade, and
+        // calls this from the fade's onComplete with `this.actor.destroy()` as
+        // the next statement. Everything here is therefore on the critical path
+        // for that. A desklet that throws, or whose onComplete never runs,
+        // leaves a mapped actor at opacity 0 -- invisible, but still reactive
+        // and still holding the input region, so it goes on swallowing clicks
+        // over a rectangle of desktop nobody can see. It cannot open its own
+        // menu any more either, so each of those clicks raises inside Cinnamon:
+        // "TypeError: this._menu is null", from _onButtonReleaseEvent.
+        //
+        // Both lines are cheap and both make that failure benign -- at worst a
+        // transparent rectangle where a dead patch of desktop used to be.
+        this._untrackMouse();
+        if (this.actor) this.actor.reactive = false;
+
         this._stopDayTimer();
         this._stopEventTimer();
         this._stopInputTimer();
