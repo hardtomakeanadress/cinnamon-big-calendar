@@ -2,7 +2,8 @@ BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
 
 FOLLOW-UP: At the user's request, the refresh interval now defaults to five
 minutes and requests online synchronization as well as checking the cache.
-The manual button remains an optional shortcut. Three new refresh regressions
+The header refresh button was removed; an optional manual action remains in
+the right-click menu. Three new refresh regressions
 pass. The report below records the preceding audit snapshot (commit 0969c5e);
 its statements about no additional periodic online polling are historical.
 

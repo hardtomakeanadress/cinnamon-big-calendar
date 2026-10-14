@@ -212,7 +212,6 @@ await test('periodic refresh defaults to 300 seconds and requests online sync', 
 await test('online refresh coalesces callers and rereads local cache once', async () => {
     const pending=deferred();let requests=0,reads=0;
     const d=desklet({refreshRemote(){requests++;return pending.promise;}});
-    d._refreshButton={set_label(){}};d._refreshTip={set_text(){}};
     d._refreshEventsSoon=()=>reads++;
     const task=d._requestRemoteRefresh();await d._requestRemoteRefresh();
     assert(requests===1 && reads===0,'duplicate request or premature cache read');
@@ -221,7 +220,6 @@ await test('online refresh coalesces callers and rereads local cache once', asyn
 });
 await test('failed online sync still runs the local recovery check', async () => {
     let reads=0;const d=desklet({refreshRemote:async()=>{throw new Error('offline');}});
-    d._refreshButton={set_label(){}};d._refreshTip={set_text(){}};
     d._refreshEventsSoon=()=>reads++;
     await d._requestRemoteRefresh();
     assert(reads===1 && !d._remoteRefreshPending,'offline sync disabled local recovery');

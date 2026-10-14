@@ -30,22 +30,21 @@ there is nothing to log into and no password to give it.
   893×555.
 - Light and dark themes both work — it starts from the Mint-Y palette and every
   colour is a setting.
-- Events update when the local calendar service reports a change. The **↻**
-  button (also **Refresh events** in the right-click menu) asks that service to
+- Events update when the local calendar service reports a change. The **Refresh events**
+  action in the right-click menu asks that service to
   synchronize online now, without blocking the desktop.
 
 ## Event updates
 
 Events created in a browser or on a phone first need to reach the local calendar
 service. The desklet requests online synchronization every **five minutes** by
-default; use **↻** to request an earlier download. **Today** and the month arrows only change the displayed
+default; use **Refresh events** in the right-click menu for an earlier download. **Today** and the month arrows only change the displayed
 dates and reread local data.
 
 Once the service reports a cache change, the desklet batches notifications for
 250 ms and reads the affected calendars. It redraws only if displayed events
 changed. Repeated online refresh requests are limited to one batch per 30 seconds.
-The button's tooltip reports whether the request was sent or failed; a sent
-request does not mean the download has finished. Offline or failed calendars
+A sync request does not mean the download has finished. Offline or failed calendars
 keep their last successfully loaded events for the displayed range.
 
 The **Calendar refresh interval** controls both online sync requests and local
@@ -117,7 +116,7 @@ built to the layout that server expects regardless, with a single
 
 The short version: **the desklet has no account, no password and no network
 code of its own.** It asks your own system what your events are, and draws the
-answer. The desklet sends no event data to a separate service. Pressing **↻** asks EDS
+answer. The desklet sends no event data to a separate service. Choosing **Refresh events** asks EDS
 to contact your existing calendar providers using their normal synchronization protocol.
 
 Concretely:
