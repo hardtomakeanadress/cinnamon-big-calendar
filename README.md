@@ -37,8 +37,8 @@ there is nothing to log into and no password to give it.
 ## Event updates
 
 Events created in a browser or on a phone first need to reach the local calendar
-service. Its own synchronization schedule still applies; use **↻** to request
-an earlier download. **Today** and the month arrows only change the displayed
+service. The desklet requests online synchronization every **five minutes** by
+default; use **↻** to request an earlier download. **Today** and the month arrows only change the displayed
 dates and reread local data.
 
 Once the service reports a cache change, the desklet batches notifications for
@@ -48,9 +48,10 @@ The button's tooltip reports whether the request was sent or failed; a sent
 request does not mean the download has finished. Offline or failed calendars
 keep their last successfully loaded events for the displayed range.
 
-The existing 20-minute interval is a recovery check for missed notifications,
-not the normal update delay. No global account synchronization settings are
-changed, and no extra periodic online polling is introduced.
+The **Calendar refresh interval** controls both online sync requests and local
+recovery checks. Its default is **5 minutes**. Requests are asynchronous and
+coalesced, and unchanged events do not trigger redraws. Provider download time
+can vary; no global account synchronization settings are changed.
 
 ## Requirements
 
@@ -260,7 +261,7 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
 | Setting | Key | Default |
 |---|---|---|
-| Recovery check interval | `event-refresh` | 20 min (5–240) |
+| Calendar refresh interval | `event-refresh` | 5 min (5–240) |
 
 ### Behaviour
 

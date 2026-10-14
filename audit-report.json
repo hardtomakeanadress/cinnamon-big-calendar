@@ -447,5 +447,11 @@
       "/usr/share/cinnamon/js/ui/extension.js"
     ],
     "package_validator": "/home/adis/cinnamon-spices-desklets/validate-spice"
+  },
+  "follow_up": {
+    "change": "User-requested five-minute periodic online synchronization plus local cache recovery. Manual refresh remains optional.",
+    "previous_audit_commit": "0969c5edbe471319a7ef2435ea26dbdf16e8fa35",
+    "additional_refresh_regressions": 3,
+    "note": "Coverage hashes and performance measurements above describe the preceding audit snapshot."
   }
 }

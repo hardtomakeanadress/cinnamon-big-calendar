@@ -199,4 +199,31 @@ await test('removed desklet cannot reclaim input even if a late callback runs', 
     d._trackMouse();let released=false;d._untrackMouse=()=>{released=true;};d._syncInputRegion();
     assert(released,'dead instance reclaimed input');
 });
+await test('periodic refresh defaults to 300 seconds and requests online sync', async () => {
+    const d=desklet({});let seconds,callback,requests=0;
+    d._timerAlive=()=>!!d._eventTimer;
+    stubImports.mainloop.timeout_add_seconds=(interval,cb)=>{seconds=interval;callback=cb;return 123;};
+    d._requestRemoteRefresh=()=>{requests++;return Promise.resolve();};
+    d._startEventTimer();assert(seconds===300,'default is not five minutes');
+    d._startEventTimer();assert(d._eventTimer===123,'watchdog replaced the timer');
+    assert(callback()===GLib.SOURCE_CONTINUE && requests===1,'timer did not request online sync');
+    d._destroyed=true;assert(callback()===GLib.SOURCE_REMOVE && requests===1,'removed desklet requested sync');
+});
+await test('online refresh coalesces callers and rereads local cache once', async () => {
+    const pending=deferred();let requests=0,reads=0;
+    const d=desklet({refreshRemote(){requests++;return pending.promise;}});
+    d._refreshButton={set_label(){}};d._refreshTip={set_text(){}};
+    d._refreshEventsSoon=()=>reads++;
+    const task=d._requestRemoteRefresh();await d._requestRemoteRefresh();
+    assert(requests===1 && reads===0,'duplicate request or premature cache read');
+    pending.resolve({requested:1,failed:0});await task;
+    assert(reads===1 && !d._remoteRefreshPending,'cache read missing or pending flag retained');
+});
+await test('failed online sync still runs the local recovery check', async () => {
+    let reads=0;const d=desklet({refreshRemote:async()=>{throw new Error('offline');}});
+    d._refreshButton={set_label(){}};d._refreshTip={set_text(){}};
+    d._refreshEventsSoon=()=>reads++;
+    await d._requestRemoteRefresh();
+    assert(reads===1 && !d._remoteRefreshPending,'offline sync disabled local recovery');
+});
 print('Refresh tests passed: '+passed);

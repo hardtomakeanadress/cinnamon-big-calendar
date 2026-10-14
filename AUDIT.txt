@@ -1,5 +1,11 @@
 BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
 
+FOLLOW-UP: At the user's request, the refresh interval now defaults to five
+minutes and requests online synchronization as well as checking the cache.
+The manual button remains an optional shortcut. Three new refresh regressions
+pass. The report below records the preceding audit snapshot (commit 0969c5e);
+its statements about no additional periodic online polling are historical.
+
 Scope: all 33 source/project files, including runtime JavaScript, settings,
 CSS, installer/removal/deployment scripts, packaging, translations, developer
 tools, tests, documentation, images, licence and repository ignore rules.
