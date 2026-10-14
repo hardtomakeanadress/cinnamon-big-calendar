@@ -7,7 +7,7 @@ desklet's defaults: the #303036 surface, the #1f9ede accent and #e1e1e1 text.
 
 Usage: make-icon.py [output.png]   (default: icon.png, 48x48)
 """
-import sys
+import argparse
 
 from PIL import Image, ImageDraw
 
@@ -54,7 +54,9 @@ def draw(size):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "icon.png"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("output", nargs="?", default="icon.png")
+    out = parser.parse_args().output
     big = draw(SIZE * SCALE)
     big.resize((SIZE, SIZE), Image.LANCZOS).save(out)
     print("wrote " + out)

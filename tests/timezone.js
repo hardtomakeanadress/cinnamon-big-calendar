@@ -144,6 +144,21 @@ test("an event crossing midnight lands on the day it starts", () => {
 
 /* ---------------------------------------------------------------- */
 
+test("an all-day event ignores an invalid TZID", () => {
+    assertEqual(startOf("DTSTART;VALUE=DATE;TZID=Europe/Bucharest:20260901"),
+        "2026-09-01T00:00:00.000Z", "civil day must not shift");
+});
+
+test("floating times follow the local clock, including duration", () => {
+    const events=eventsOf("DTSTART:20261014T090000", "DURATION:PT2H");
+    assertEqual(events[0].start,new Date(2026,9,14,9).getTime(),"09:00 local");
+    assertEqual(events[0].end,new Date(2026,9,14,11).getTime(),"11:00 local");
+});
+test("DATE without DTEND defaults to a full civil day", () => {
+    const e=eventsOf("DTSTART;VALUE=DATE:20261014")[0];
+    assertEqual(e.end-e.start,86400000,"one day");
+});
+
 print("");
 print("  Big Calendar desklet -- timezone tests");
 print("  " + "=".repeat(46));

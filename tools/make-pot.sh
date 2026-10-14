@@ -30,7 +30,7 @@ xgettext \
     --from-code=UTF-8 \
     --package-name="Big Calendar" \
     --output="$TMPDIR_POT/js.pot" \
-    desklet.js
+    desklet.js lib/eventIndex.js
 
 # The schema's translatable fields, with a fake source reference so a
 # translator can see which setting each string belongs to.
@@ -55,7 +55,7 @@ def add(text, where):
 def walk(node, path):
     if isinstance(node, dict):
         for key, value in node.items():
-            if key in ("description", "tooltip"):
+            if key in ("description", "tooltip", "title", "units"):
                 add(value, path)
             elif key == "options" and isinstance(value, dict):
                 # The visible half of an options map is what the user reads.
@@ -75,16 +75,16 @@ with open(sys.argv[1], "w", encoding="utf-8") as out:
     out.write('msgid ""\nmsgstr ""\n')
     out.write('"Content-Type: text/plain; charset=UTF-8\\n"\n\n')
     for where, text in entries:
-        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = json.dumps(text, ensure_ascii=False)[1:-1]
         out.write("#: settings-schema.json:%s\n" % where)
         out.write('msgid "%s"\n' % escaped)
         out.write('msgstr ""\n\n')
 PYEOF
 
-msgcat --use-first "$TMPDIR_POT/js.pot" "$TMPDIR_POT/schema.pot" --output-file="$OUT"
+msgcat --use-first "$TMPDIR_POT/js.pot" "$TMPDIR_POT/schema.pot" --output-file="$TMPDIR_POT/complete.pot"
 
 # The placeholders xgettext leaves in the header read as unfinished work.
-python3 - "$OUT" <<'PYEOF'
+python3 - "$TMPDIR_POT/complete.pot" <<'PYEOF'
 import re
 import sys
 
@@ -105,6 +105,7 @@ with open(path, "w", encoding="utf-8") as fh:
 PYEOF
 
 # A .po with a syntax error in it is worse than no .po, so prove it compiles.
-msgfmt --check-format --output-file=/dev/null "$OUT"
+msgfmt --check-format --output-file=/dev/null "$TMPDIR_POT/complete.pot"
+cp "$TMPDIR_POT/complete.pot" "$OUT"
 
 printf '%s: %s strings\n' "$OUT" "$(grep -c '^msgid ' "$OUT")"

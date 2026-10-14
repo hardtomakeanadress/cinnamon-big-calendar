@@ -1,0 +1,77 @@
+BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
+
+Scope: all 33 source/project files, including runtime JavaScript, settings,
+CSS, installer/removal/deployment scripts, packaging, translations, developer
+tools, tests, documentation, images, licence and repository ignore rules.
+audit-report.json records each reviewed file and its SHA-256 hash.
+
+RESULT
+The project-wide review is complete. Confirmed fixes are installed locally.
+No commits, pushes or publication were performed. Settings and other desklets
+were preserved. The previous installation was retained at:
+/home/adis/.local/share/cinnamon/desklets/.bigCalendar@adis.stage.ql5K4T.previous
+
+FIXED
+- Event updates respond to EDS revisions, coalesce work, avoid redundant
+  redraws and recover from failed/slow services. Manual refresh requests sync.
+- Recurrence exceptions, moved occurrences, floating/local dates, all-day
+  defaults, zero-duration boundaries and timezone exclusions were corrected.
+- Hidden-event +N counts, tooltip monitor placement, event-color validation,
+  smooth scrolling, input teardown, localization and locale fallbacks fixed.
+- Installation now stages and validates before replacement, rolls back a
+  failed rename, keeps a backup and rejects malformed enabled-desklet lists.
+- Deployment uses the same installer and verifies Cinnamon's native reload.
+- Translation failures preserve valid installed translations.
+- Failed/interrupted screenshots restore the desklet; existing files are not
+  overwritten. Failed builds preserve the prior release/package.
+- Tests now cover meaningful failure cases; documentation matches behavior.
+
+YOUR OVERLAP/CLICK CONCERN
+Tested on the actual desktop with a covering test window and the real Configure
+window placed over the desklet. Covering windows received clicks; uncovered
+navigation worked; all four Configure tabs activated with real mouse clicks.
+Hover hid when covered and recovered afterward. Menu open/close and two
+reloads passed. Old feeds and timers were released; no duplicate day tooltip
+remained. The current overlap problem was not reproduced, so its working
+input guard was preserved. Late calls cannot re-track a removed instance.
+Screenshot interruption was a confirmed cause of misplaced actors and is fixed.
+
+VERIFICATION
+141 distinct automated checks passed. Date suites also passed in UTC,
+Bucharest, New York, Kiritimati and Havana. Real synthetic EDS add/edit/delete
+and moved-recurring-event tests passed in a private profile. Both release
+forms build; the Spices tree passes Cinnamon's validator. Installed runtime
+files match the audited source. Settings and enabled-desklet positions match
+the pre-install values.
+
+Five unchanged live refreshes: 446.7 ms / 5 redraws before, 185.7 ms / 0 redraws
+after. Largest sampled main-loop gap fell from 70.5 to 21.4 ms. This is a small
+measurement, not a guarantee for every workload. Periodic online polling was
+not increased; no new runtime dependency or architecture was introduced.
+
+UNRESOLVED / LIMITS
+1. The standalone live-calendar test reads successfully but exits 139 during
+   native CJS/EDS shutdown. A minimal script with NO Big Calendar imports also
+   crashes; gdb identifies native GLib/EDS/GObject finalization. This is an
+   external issue and is recorded as a failure, not hidden by the test suite.
+2. RDATE-only schedules, multiple RRULEs, custom VTIMEZONE definitions and
+   THISANDFUTURE overrides are not fully supported. The 5,000-step recurrence
+   limit can omit old/high-frequency series. A different recurrence design
+   needs separate agreement.
+3. Dates outside years 1000–9999, region-specific weekend tinting and individual
+   calendar selection remain limitations. Online events still depend on EDS
+   downloading them; a refresh request is not proof of download completion.
+4. Runtime tested on Cinnamon 6.6.9 / CJS 115.1 / EDS 3.52.3 and one X11 monitor.
+   Other desktop versions, Wayland, physical multi-monitor setups and every
+   provider/settings combination were not exhaustively tested. No GitHub CI
+   workflow exists in this checkout; none was added.
+
+DELEGATION
+The bounded script review took 2m03s and provided a useful checklist. The
+installer implementation attempt took 1m57s, hit its turn limit and produced
+no edits; it was not worthwhile and was completed directly. Reported token
+usage, prior review metrics, estimated supervision and validation are in
+JSON. No measured savings or actual billing is claimed. Pricing research
+stopped at your request.
+
+Detailed evidence, limitations, coverage and checks: audit-report.json

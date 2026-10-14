@@ -130,10 +130,9 @@ test("ISO week numbers against known reference dates", () => {
 test("ISO week is stable for all 7 days of a week", () => {
     // Every day from Monday to Sunday must report the same week/year.
     const got = [];
-    for (let d = 29; d <= 35; d++) {
+    for (let d = 26; d <= 32; d++) {
         const date = new Date(Date.UTC(2026, 0, d));
-        if (date.getUTCMonth() !== 0) continue;
-        got.push(C.isoWeek(2026, 0, d).week);
+        got.push(C.isoWeek(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()).week);
     }
     const unique = got.filter((v, i) => got.indexOf(v) === i);
     assertEqual(unique.length, 1, "one week number across the week: " + got.join(","));
@@ -231,10 +230,10 @@ test("US week never exceeds 54", () => {
 test("first day of week by region", () => {
     assertEqual(C.firstDayOfWeekForLocale("ro-RO"), 1, "Romania is Monday");
     assertEqual(C.firstDayOfWeekForLocale("en-US"), 0, "US is Sunday");
-    assertEqual(C.firstDayOfWeekForLocale("en-GB"), 0, "UK is Sunday");
+    assertEqual(C.firstDayOfWeekForLocale("en-GB"), 1, "UK is Monday");
     assertEqual(C.firstDayOfWeekForLocale("de-DE"), 1, "Germany is Monday");
     assertEqual(C.firstDayOfWeekForLocale("fr-FR"), 1, "France is Monday");
-    assertEqual(C.firstDayOfWeekForLocale("ar-SA"), 6, "Saudi Arabia is Saturday");
+    assertEqual(C.firstDayOfWeekForLocale("ar-SA"), 0, "Saudi Arabia is Sunday");
     assertEqual(C.firstDayOfWeekForLocale("ja-JP"), 0, "Japan is Sunday");
     assertEqual(C.firstDayOfWeekForLocale("en"), 0, "bare 'en' falls back to US");
     assertEqual(C.firstDayOfWeekForLocale("ro"), 1, "bare 'ro' falls back to Monday");
@@ -377,10 +376,11 @@ test("adjacent months agree on their shared days", () => {
     // the next month's grid.
     const a = C.buildMonthMatrix(2026, 8, 1, { rows: 6, today: new Date(2026, 0, 1) });
     const b = C.buildMonthMatrix(2026, 9, 1, { rows: 6, today: new Date(2026, 0, 1) });
-    const tail = a[0].days.map(d => d.day);
-    const head = b[0].days.map(d => d.day);
-    assertEqual(tail.length, 7, "7 cells");
-    assertEqual(head.length, 7, "7 cells");
+    const sharedA = a.flatMap(w => w.days).filter(d => d.month === 9);
+    const sharedB = b.flatMap(w => w.days).filter(d => d.month === 9 && d.day <= sharedA.length);
+    const fields = days => days.map(({year,month,day,isWeekend}) => ({year,month,day,isWeekend}));
+    assertTrue(sharedA.length > 0, "must compare actual shared days");
+    assertEqual(fields(sharedA), fields(sharedB), "shared October dates agree");
 });
 
 /* ------------------------------------------------------------------ *
@@ -721,6 +721,22 @@ test("an untitled continuation still says something", () => {
     const mystery = timed("", 2026, 8, 21, 22, 0, 4);
     assertEqual(E.describeEntry({ event: mystery, first: false, last: true }, true),
         "↳  (no title)", "not an empty label");
+});
+
+
+test("malformed timestamps cannot create bogus day entries", () => {
+    assertEqual(E.buildEventIndex([null,{start:NaN,end:NaN},{start:Infinity,end:Infinity},{start:1e20,end:1e20}]),{},"invalid dates skipped");
+});
+test("event fallback labels and clock suffixes can be translated", () => {
+    const translate=text=>"["+text+"]";
+    assertEqual(E.describeEvent(timed("",2026,8,1,14,0,1),false,translate),"2:00 [PM]  [(no title)]","translated fallback");
+});
+test("locale fallback uses standard regions and ignores extension keys", () => {
+    assertEqual(C.firstDayOfWeekForLocale("en-AU"),1,"Australia");
+    assertEqual(C.firstDayOfWeekForLocale("ar-AE"),1,"UAE");
+    assertEqual(C.firstDayOfWeekForLocale("zh-CN"),1,"China");
+    assertEqual(C.firstDayOfWeekForLocale("dv-MV"),5,"Maldives");
+    assertEqual(C.regionFromLocale("ro-u-ca-gregory"),"","calendar extension is not Canada");
 });
 
 /* ------------------------------------------------------------------ *

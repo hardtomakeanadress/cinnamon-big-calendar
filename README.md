@@ -5,8 +5,7 @@ from the calendars already connected in Online Accounts.
 
 ![Big Calendar showing September 2026](screenshot.png)
 
-Everything about it is configurable — size, colours, layout, which events are
-shown and how. It reads the calendars your system already knows about, so
+Size, colours, layout and event display style are configurable. It reads the calendars your system already knows about, so
 there is nothing to log into and no password to give it.
 
 ---
@@ -31,6 +30,27 @@ there is nothing to log into and no password to give it.
   893×555.
 - Light and dark themes both work — it starts from the Mint-Y palette and every
   colour is a setting.
+- Events update when the local calendar service reports a change. The **↻**
+  button (also **Refresh events** in the right-click menu) asks that service to
+  synchronize online now, without blocking the desktop.
+
+## Event updates
+
+Events created in a browser or on a phone first need to reach the local calendar
+service. Its own synchronization schedule still applies; use **↻** to request
+an earlier download. **Today** and the month arrows only change the displayed
+dates and reread local data.
+
+Once the service reports a cache change, the desklet batches notifications for
+250 ms and reads the affected calendars. It redraws only if displayed events
+changed. Repeated online refresh requests are limited to one batch per 30 seconds.
+The button's tooltip reports whether the request was sent or failed; a sent
+request does not mean the download has finished. Offline or failed calendars
+keep their last successfully loaded events for the displayed range.
+
+The existing 20-minute interval is a recovery check for missed notifications,
+not the normal update delay. No global account synchronization settings are
+changed, and no extra periodic online polling is introduced.
 
 ## Requirements
 
@@ -75,8 +95,9 @@ sha256sum -c bigCalendar@adis.zip.sha256
 ```
 
 From a checkout of the source the same script does the same thing, and
-`./deploy.sh` in addition reloads the desklet in the running session so an edit
-takes effect without restarting Cinnamon. `./deploy.sh --disable` removes it.
+`./deploy.sh` uses that same installer. Both reload the running desklet so an
+edit takes effect without restarting Cinnamon. Updates retain a hidden backup
+beside the installation and honor `XDG_DATA_HOME` when set. `./deploy.sh --disable` removes it.
 
 **To take it off the desktop and put it back**, right-click it and choose
 *Remove this desklet*, or use **Menu → Desklets**. Your settings are kept, so
@@ -95,7 +116,8 @@ built to the layout that server expects regardless, with a single
 
 The short version: **the desklet has no account, no password and no network
 code of its own.** It asks your own system what your events are, and draws the
-answer. Nothing about you leaves the machine because of this desklet.
+answer. The desklet sends no event data to a separate service. Pressing **↻** asks EDS
+to contact your existing calendar providers using their normal synchronization protocol.
 
 Concretely:
 
@@ -110,7 +132,7 @@ Concretely:
   service is what actually talks to Google, refreshing tokens and caching
   results for offline use — exactly as it already does for the Calendar
   application and for GNOME's clock. The desklet is a reader of data that is on
-  your machine already. **Every call it makes is asynchronous**, so nothing it
+  your machine already. **Every calendar service request is asynchronous**, so nothing it
   asks for can freeze the desktop while it waits — not even if
   `evolution-data-server` is wedged. It does its own date arithmetic on what
   comes back:
@@ -238,7 +260,7 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
 | Setting | Key | Default |
 |---|---|---|
-| Re-check for changes every | `event-refresh` | 20 min (5–240) |
+| Recovery check interval | `event-refresh` | 20 min (5–240) |
 
 ### Behaviour
 
@@ -254,14 +276,19 @@ These are real and worth knowing before you rely on the desklet.
 - **All calendars are shown, with no per-calendar filter.** There is no way yet
   to hide, say, a birthday calendar while keeping your work one. The
   `show-events` setting is all-or-nothing.
+- **Some recurrence formats remain unsupported.** Expansion uses one RRULE;
+  RDATE-only schedules and multiple RRULEs are not fully supported. A safety
+  cap of 5,000 recurrence steps can also omit occurrences of very old or
+  high-frequency series. The audit fixes timezone exclusions and moved
+  exceptions, but does not replace the recurrence engine.
 - **A day shows fewer dots than `event-max` when they will not fit.** The dots
-  are drawn to a fixed pixel size and the cell is only so wide, so the desklet
+  scale with the text size and the cell is only so wide, so the desklet
   caps the row at what actually fits and counts the rest into the `+N` label —
   eight dots at the smallest text size would otherwise spill over the days on
-  either side. The count is always in the tooltip.
-- **Years 0000–0099 are not handled.** The desklet uses two-digit years
-  internally in one place where four-digit years would be needed to cover
-  them. No real calendar data is affected.
+  either side. The tooltip lists up to ten events and counts any remaining ones.
+- **Dates outside years 1000–9999 are not supported consistently.** JavaScript
+  treats constructor years below 100 specially, and the saved view and day-key
+  ordering assume four-digit years.
 - **The screenshot above shows the background fully opaque.** The default is
   85 %, so on your desktop the wallpaper shows through slightly. The opaque
   render is used only so the image reads clearly in a README.
@@ -269,10 +296,14 @@ These are real and worth knowing before you rely on the desklet.
 ## Development
 
 ```sh
-cjs -m tests/run-tests.js         # grid, formatting and indexing   (57 passing)
-cjs -m tests/timezone.js          # all-day and zoned-event dates    ( 9 passing)
-cjs -m tests/recurrence.js        # repeating-event expansion        (16 passing)
-cjs -m tests/feed.js              # connecting and reconnecting      ( 5 passing)
+cjs -m tests/run-tests.js         # grid, formatting and indexing
+cjs -m tests/timezone.js          # all-day, floating and zoned-event dates
+cjs -m tests/recurrence.js        # repeating-event expansion
+cjs -m tests/feed.js              # connecting, reconnecting and deduplication
+cjs -m tests/refresh.js           # notifications, failures, query queue and rendering
+cjs -m tests/ui.js                # input-region and tooltip regression checks
+python3 tests/project.py          # installation, removal, packaging, translations and screenshots in temporary directories
+bash tests/isolated-refresh.sh    # real add/edit/delete notifications in a temporary EDS profile
 cjs -m tests/integration.js       # reads the real evolution-data-server on this machine
 ./install.sh --check              # can this machine run the desklet?
 ./deploy.sh                       # install and reload in the running session
@@ -285,17 +316,19 @@ cjs -m tests/integration.js       # reads the real evolution-data-server on this
 ./tools/make-spice.sh             # build dist/spice/ to open a pull request against the Cinnamon Spices repo
 ```
 
-The first four need no desktop to run — they import `lib/` directly and skip
-themselves if the calendar libraries are missing. Between them they cover the
+The unit tests need no running desktop. The refresh tests load the actual desklet
+methods with UI objects stubbed. The isolated test starts its own calendar service
+and uses synthetic events; it does not load your personal accounts. Together they cover the
 things that are easy to get wrong and hard to notice: which civil date an
 all-day event belongs to in a timezone behind UTC, whether a weekly series
 survives a daylight-saving change, whether a long event stops being drawn past
 its 400th day, and whether a calendar that was unreachable at startup is picked
 up later.
 
-`tests/integration.js` is the one that needs the real thing. It prints the
-calendars it finds, the events in the current year, and checks that an all-day
-event lands on the right civil date against live data.
+`tests/integration.js` is the one that needs the real thing. It prints only calendar/event counts, checks timestamps, and reports failures
+with a nonzero exit status. On the audited CJS/EDS combination it reads correctly
+but currently crashes during native process shutdown; see `audit-report.json`.
+Use the isolated synthetic test for reproducible add/edit/delete checks.
 
 ### Reloading while you work
 
@@ -419,7 +452,9 @@ descriptions and tooltips. Copy it to `po/LL.po`, translate, then:
 msgfmt po/LL.po -o ~/.local/share/locale/LL/LC_MESSAGES/bigCalendar@adis.mo
 ```
 
-which is the directory the desklet points gettext at.
+which is the directory the desklet points gettext at by default. Create the
+`LL/LC_MESSAGES` directory first, or let `./install.sh` compile translations.
+For a custom `XDG_DATA_HOME`, use its `locale/` directory instead.
 
 ## Licence
 

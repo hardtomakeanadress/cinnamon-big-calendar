@@ -20,15 +20,17 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 UUID="bigCalendar@adis"
 OUT="dist/$UUID.zip"
-STAGE=$(mktemp -d)
+mkdir -p dist
+STAGE=$(mktemp -d "$ROOT/dist/.release.XXXXXX")
+ARCHIVE="$STAGE/$UUID.zip"
 trap 'rm -rf "$STAGE"' EXIT
 
 FILES=(desklet.js metadata.json settings-schema.json stylesheet.css icon.png
-       LICENSE README.md install.sh)
+       LICENSE README.md screenshot.png install.sh)
 
 # Everything the desklet cannot start without. Checked before the archive is
 # built rather than after it is unzipped on another machine.
-for f in "${FILES[@]}"; do
+for f in "${FILES[@]}" lib/calendarUtils.js lib/eventIndex.js lib/calendarSource.js; do
     [[ -f "$f" ]] || { echo "make-dist: missing $f" >&2; exit 1; }
 done
 
@@ -50,14 +52,13 @@ done
 # arrive executable.
 chmod +x "$STAGE/$UUID/install.sh"
 
-rm -f "$OUT"
-( cd "$STAGE" && zip -qr -X "$ROOT/$OUT" "$UUID" )
+( cd "$STAGE" && zip -qr -X "$ARCHIVE" "$UUID" )
 
 # Prove the layout, since the failure it guards against is silent: the wrong
 # top level makes Cinnamon install a desklet with no desklet.js in it.
-TOP=$(unzip -Z1 "$OUT" | cut -d/ -f1 | sort -u)
+TOP=$(unzip -Z1 "$ARCHIVE" | cut -d/ -f1 | sort -u)
 [[ "$TOP" == "$UUID" ]] || { echo "make-dist: bad archive layout: $TOP" >&2; exit 1; }
-unzip -Z1 "$OUT" | grep -qx "$UUID/desklet.js" \
+unzip -Z1 "$ARCHIVE" | grep -qx "$UUID/desklet.js" \
     || { echo "make-dist: desklet.js is not in the archive root" >&2; exit 1; }
 
 # A checksum to publish beside the archive, so someone can check what they
@@ -67,8 +68,9 @@ unzip -Z1 "$OUT" | grep -qx "$UUID/desklet.js" \
 #
 # The name inside is the bare filename, so `sha256sum -c` works from whatever
 # directory the two files were downloaded into.
-rm -f "$OUT.sha256"
-( cd dist && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256" )
+( cd "$STAGE" && sha256sum "$UUID.zip" > "$UUID.zip.sha256" )
+mv -f "$ARCHIVE" "$OUT"
+mv -f "$STAGE/$UUID.zip.sha256" "$OUT.sha256"
 
 printf '%s  (%s, %s files)\n' "$OUT" "$(du -h "$OUT" | cut -f1)" "$(unzip -Z1 "$OUT" | wc -l)"
 printf '%s\n' "$(cat "$OUT.sha256")"

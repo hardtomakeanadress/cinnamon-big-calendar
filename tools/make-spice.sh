@@ -37,7 +37,11 @@ cd "$(dirname "$0")/.."
 
 ROOT=$(pwd)
 UUID="bigCalendar@adis"
-OUT="dist/spice/$UUID"
+DEST="dist/spice/$UUID"
+mkdir -p dist/spice
+STAGE=$(mktemp -d "$ROOT/dist/spice/.build.XXXXXX")
+OUT="$STAGE/$UUID"
+trap 'rm -rf -- "$STAGE"' EXIT
 AUTHOR="hardtomakeanadress"
 
 # The desklet, as it goes into files/$UUID. The same set make-dist.sh ships,
@@ -47,13 +51,13 @@ AUTHOR="hardtomakeanadress"
 FILES=(desklet.js metadata.json settings-schema.json stylesheet.css icon.png
        LICENSE)
 
-for f in "${FILES[@]}" tools/spice-README.md screenshot.png; do
+for f in "${FILES[@]}" tools/spice-README.md screenshot.png \
+    lib/calendarUtils.js lib/eventIndex.js lib/calendarSource.js; do
     [[ -f "$f" ]] || { echo "make-spice: missing $f" >&2; exit 1; }
 done
 [[ -d lib ]] || { echo "make-spice: missing lib/" >&2; exit 1; }
 [[ -d po  ]] || { echo "make-spice: missing po/"  >&2; exit 1; }
 
-rm -rf "$OUT"
 mkdir -p "$OUT/files/$UUID/lib" "$OUT/files/$UUID/po"
 
 cp "${FILES[@]}" "$OUT/files/$UUID/"
@@ -166,6 +170,13 @@ for pot in "$OUT/files/$UUID/po/"*.pot; do
     [[ -z "$err" ]] || fail "xgettext wrote to stderr for $(basename "$pot"): $err"
 done
 
+# Publish only the validated tree. Keep the prior build for inspection.
+if [[ -e "$DEST" ]]; then mv -T "$DEST" "$STAGE.previous"; fi
+if ! mv -T "$OUT" "$DEST"; then
+    [[ ! -d "$STAGE.previous" ]] || mv -T "$STAGE.previous" "$DEST"
+    exit 1
+fi
+OUT="$DEST"
 printf '%s/  (%s files)\n' "$OUT" "$(find "$OUT" -type f | wc -l)"
 echo
 echo "Next: cp -r $OUT <spices-checkout>/ && cd <spices-checkout> && ./validate-spice $UUID"

@@ -10,17 +10,15 @@
 # no arguments for the common case, needs no root, writes only under $HOME, and
 # leaves every other desklet alone.
 #
-# deploy.sh is the other script, for the machine where the source lives: it
-# also reloads the running desklet so an edit takes effect. This one does not
-# need to, because on a machine installing for the first time there is nothing
-# loaded yet -- enabling the desklet in the settings is enough.
+# deploy.sh uses this same installer. Updates reload through Cinnamon
+# without toggling other desklets or deleting their settings.
 
 set -euo pipefail
 
 UUID="bigCalendar@adis"
 SRC="$(cd "$(dirname "$0")" && pwd)"
-DEST="$HOME/.local/share/cinnamon/desklets/$UUID"
-LOCALE_DIR="$HOME/.local/share/locale"
+DEST="${XDG_DATA_HOME:-$HOME/.local/share}/cinnamon/desklets/$UUID"
+LOCALE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/locale"
 
 # Where an install lands on the desktop the first time. Cinnamon remembers
 # wherever the user drags it afterwards and we never move it again.
@@ -214,12 +212,12 @@ if raw.startswith("@as "):
 try:
     items = ast.literal_eval(raw)
 except (ValueError, SyntaxError):
-    items = []
-if not isinstance(items, list):
-    items = []
+    raise SystemExit("invalid enabled-desklets value; refusing to replace it")
+if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
+    raise SystemExit("enabled-desklets must be a list of strings")
 
 def is_mine(item):
-    return isinstance(item, str) and item.split(":", 1)[0] == uuid
+    return item.split(":", 1)[0].lstrip("!") == uuid
 
 mine = [i for i in items if is_mine(i)]
 others = [i for i in items if not is_mine(i)]
@@ -239,7 +237,7 @@ else:
         while n in taken:
             n += 1
         mine = ["%s:%d:%s:%s" % (uuid, n, x, y)]
-    items = others + mine
+        items = items + mine
 
 # json.dumps escapes the way GVariant reads; Python repr() does not. repr()
 # writes a control character as \x01, which GVariant takes as four literal
@@ -258,7 +256,7 @@ sys.stdout.write(json.dumps(items))
 # so this does the same, for the same reason: a translation that is present
 # but uncompiled is invisible.
 install_translations() {
-    local po mo lang
+    local po mo lang tmp_mo
     for po in "$SRC"/po/*.po; do
         [[ -e "$po" ]] || return 0
         command -v msgfmt >/dev/null 2>&1 || {
@@ -268,15 +266,89 @@ install_translations() {
         lang=$(basename "$po" .po)
         mkdir -p "$LOCALE_DIR/$lang/LC_MESSAGES"
         mo="$LOCALE_DIR/$lang/LC_MESSAGES/$UUID.mo"
-        if msgfmt -c "$po" -o "$mo" 2>/dev/null; then
+        tmp_mo=$(mktemp "$mo.XXXXXX")
+        if msgfmt -c "$po" -o "$tmp_mo" 2>/dev/null; then
+            chmod 644 "$tmp_mo"
+            mv -f "$tmp_mo" "$mo"
             ok "translation $lang"
         else
-            warn "po/$lang.po has an error and was skipped"
+            warn "po/$lang.po has an error; any previous translation was retained"
         fi
+        rm -f "$tmp_mo"
     done
 }
 
 # --- Install --------------------------------------------------------------
+
+# Stage a complete install on the same filesystem. Keep the previous copy.
+stage_install() {
+    local parent stage backup f
+    parent=$(dirname "$DEST")
+    [[ ! -L "$DEST" ]] || die "refusing to replace a symlink: $DEST"
+    for f in desklet.js metadata.json settings-schema.json stylesheet.css icon.png LICENSE \
+        lib/calendarUtils.js lib/eventIndex.js lib/calendarSource.js; do
+        [[ -f "$SRC/$f" ]] || die "missing source file: $f; existing install untouched"
+    done
+    python3 - "$SRC" "$UUID" <<'PYEOF'
+import json, pathlib, sys
+src = pathlib.Path(sys.argv[1])
+if json.loads((src / "metadata.json").read_text())["uuid"] != sys.argv[2]:
+    raise SystemExit("metadata UUID mismatch")
+json.loads((src / "settings-schema.json").read_text())
+PYEOF
+    mkdir -p "$parent"
+    stage=$(mktemp -d "$parent/.$UUID.stage.XXXXXX")
+    backup="$stage.previous"
+    INSTALL_STAGE=$stage
+    INSTALL_BACKUP=$backup
+    trap 'if [[ ! -e "$DEST" && -d "$INSTALL_BACKUP" ]]; then mv -T "$INSTALL_BACKUP" "$DEST"; fi; rm -rf -- "$INSTALL_STAGE"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    if [[ -d "$DEST" ]]; then cp -a "$DEST/." "$stage/"; fi
+    rm -rf "$stage/lib"
+    mkdir "$stage/lib"
+    # Remove only staged copies first, so cp cannot follow a preexisting symlink.
+    for f in desklet.js metadata.json settings-schema.json stylesheet.css icon.png LICENSE; do
+        rm -f -- "$stage/$f"
+        cp "$SRC/$f" "$stage/$f"
+    done
+    cp "$SRC"/lib/*.js "$stage/lib/"
+    chmod 755 "$stage" "$stage/lib"
+    if [[ -e "$DEST" ]]; then mv -T "$DEST" "$backup"; fi
+    mv -T "$stage" "$DEST"
+    trap - EXIT INT TERM
+    [[ ! -d "$backup" ]] || note "Previous installation retained at $backup"
+}
+
+reload_running() {
+    python3 - "$UUID" <<'PYEOF'
+import json, sys, time
+from gi.repository import Gio, GLib
+uuid = json.dumps(sys.argv[1])
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+def evaluate(code):
+    ok, value = bus.call_sync("org.Cinnamon", "/org/Cinnamon", "org.Cinnamon", "Eval",
+        GLib.Variant("(s)", (code,)), None, Gio.DBusCallFlags.NONE, 10000, None).unpack()
+    if not ok:
+        raise RuntimeError(value)
+    return json.loads(value)
+lookup = "imports.ui.deskletManager.definitions.find(x=>x.uuid===" + uuid + ")?.desklet"
+# Allow the enabled-desklets change to finish first. A newly added instance
+# can still have an old cached entry module, so reload it once it is ready.
+for _ in range(100):
+    if evaluate("(()=>{const d=" + lookup + ";return !!(d && d._ready);})()"):
+        break
+    time.sleep(.1)
+evaluate("(()=>{const d=" + lookup + ";if(d)d.__bigCalendarPrevious=true;"
+         "const E=imports.ui.extension;E.reloadExtension(" + uuid + ",E.Type.DESKLET);return true;})()")
+for _ in range(100):
+    if evaluate("(()=>{const d=" + lookup + ";return !!(d && d._ready && !d.__bigCalendarPrevious);})()"):
+        break
+    time.sleep(.1)
+else:
+    raise SystemExit("Files installed, but reload did not become ready. Check Cinnamon logs.")
+PYEOF
+}
 
 do_install() {
     check_machine
@@ -291,19 +363,14 @@ do_install() {
        somewhere else and run it from there."
     fi
 
-    # lib/ is replaced rather than merged, so a module deleted from the source
-    # does not linger in the installed copy.
-    rm -rf "$DEST/lib"
-    mkdir -p "$DEST/lib"
-    cp "$SRC/desklet.js" "$SRC/metadata.json" "$SRC/settings-schema.json" \
-       "$SRC/stylesheet.css" "$SRC/icon.png" "$SRC/LICENSE" "$DEST/"
-    cp "$SRC"/lib/*.js "$DEST/lib/"
+    stage_install
     ok "installed to $DEST"
 
     install_translations
 
     if cinnamon_running; then
         edit_enabled add
+        reload_running
         ok "enabled on the desktop"
         printf '\n%sDone.%s The calendar should be on your desktop now.\n' "$BOLD" "$OFF"
         note "Right-click it and choose Configure for its settings."
@@ -323,13 +390,8 @@ do_install() {
 do_uninstall() {
     # The list is edited before the files go, so a failure here leaves a
     # working desklet rather than an entry pointing at nothing.
-    if cinnamon_running; then
-        edit_enabled remove
-        ok "removed from the desklet list"
-    else
-        warn "Cinnamon is not running here, so the desklet list was not touched.
-       Remove it by hand in Add desklets if it is still listed."
-    fi
+    edit_enabled remove
+    ok "removed from the desklet list"
 
     if [[ -d "$DEST" ]]; then
         rm -rf "$DEST"
@@ -338,10 +400,15 @@ do_uninstall() {
         note "nothing installed at $DEST"
     fi
 
+    local mo
+    for mo in "$LOCALE_DIR"/*/LC_MESSAGES/"$UUID.mo"; do
+        [[ ! -f "$mo" ]] || rm -f -- "$mo"
+    done
+
     # The settings file is deliberately left in place. Removing a desklet and
     # removing the choices made about it are different requests, and only one
     # of them was asked for.
-    local cfg="$HOME/.config/cinnamon/spices/$UUID"
+    local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID"
     if [[ -d "$cfg" ]]; then
         note "your settings are still in $cfg (delete it to start fresh)"
     fi
@@ -350,6 +417,7 @@ do_uninstall() {
         "$BOLD" "$OFF"
 }
 
+[[ $# -le 1 ]] || die "too many arguments (try --help)"
 case "${1:-}" in
     --uninstall|--remove|-u) do_uninstall ;;
     --check|--dry-run|-n)    check_machine; ok "this machine can run the desklet" ;;

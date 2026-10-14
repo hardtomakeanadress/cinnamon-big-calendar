@@ -155,6 +155,8 @@ test("a moved occurrence is not also drawn at its old time", () => {
         "RECURRENCE-ID:20260901T090000Z", "END:VEVENT"].join("\r\n"));
 
     const events = feed._collect([master, moved], ENTRY, ...SEPTEMBER);
+    assertEqual(events.length, 4, "moved occurrence replaces the original");
+    assertEqual(events.some(e => new Date(e.start).toISOString() === "2026-09-01T09:00:00.000Z"), false, "old time removed");
     const onTheThird = events.filter(e => new Date(e.start).toISOString().slice(0, 10) === "2026-09-03");
     assertEqual(onTheThird.length, 1, "one event on the 3rd");
     assertEqual(new Date(onTheThird[0].start).toISOString(), "2026-09-03T14:00:00.000Z", "at the new time");
@@ -225,6 +227,45 @@ test("an unreadable rule falls back to the single stored date", () => {
 });
 
 /* ---------------------------------------------------------------- */
+
+test("separate EXDATE properties are all honored", () => {
+    assertEqual(days(["DTSTART:20260901T090000Z", "DTEND:20260901T100000Z",
+        "RRULE:FREQ=WEEKLY;COUNT=4", "EXDATE:20260908T090000Z", "EXDATE:20260922T090000Z"]),
+        ["2026-09-01", "2026-09-15"], "both exclusions");
+});
+
+test("EXDATE with its own TZID is compared at the correct instant", () => {
+    assertEqual(days(["DTSTART:20260901T060000Z", "DTEND:20260901T070000Z",
+        "RRULE:FREQ=WEEKLY;COUNT=3", "EXDATE;TZID=Europe/Bucharest:20260908T090000"]),
+        ["2026-09-01", "2026-09-15"], "zoned exclusion");
+});
+
+test("UTC EXDATE excludes the same instant in a zoned series", () => {
+    assertEqual(days(["DTSTART;TZID=Europe/Bucharest:20260901T090000",
+        "DTEND;TZID=Europe/Bucharest:20260901T100000", "RRULE:FREQ=WEEKLY;COUNT=3",
+        "EXDATE:20260908T060000Z"]), ["2026-09-01", "2026-09-15"], "UTC exception");
+});
+
+test("all-day recurrence ignores an invalid TZID", () => {
+    assertEqual(days(["DTSTART;VALUE=DATE;TZID=Europe/Bucharest:20260901",
+        "DTEND;VALUE=DATE;TZID=Europe/Bucharest:20260902", "RRULE:FREQ=WEEKLY;COUNT=3"]),
+        ["2026-09-01", "2026-09-08", "2026-09-15"], "civil dates");
+});
+
+test("a zero-duration occurrence exactly at the window start survives", () => {
+    assertEqual(days(["DTSTART:20260901T000000Z","RRULE:FREQ=DAILY;COUNT=1"]),["2026-09-01"],"boundary reminder");
+});
+test("all-day series without DTEND covers the first day west of UTC", () => {
+    const events=feed._toEvents(component("DTSTART;VALUE=DATE:20260901","RRULE:FREQ=WEEKLY;COUNT=2"),
+        ENTRY,Date.UTC(2026,8,1,4),Date.UTC(2026,8,2,4),new Map());
+    assertEqual(events.length,1,"first civil day retained");
+    assertEqual(events[0].end-events[0].start,86400000,"one civil day");
+});
+test("floating recurrence stays at local wall time across DST", () => {
+    const events=feed._toEvents(component("DTSTART:20260302T090000","DTEND:20260302T100000","RRULE:FREQ=WEEKLY;COUNT=5"),
+        ENTRY,Date.UTC(2026,2,1),Date.UTC(2026,3,1),new Map());
+    assertEqual(events.map(e=>new Date(e.start).getHours()),[9,9,9,9,9],"local 09:00");
+});
 
 print("");
 print("  Big Calendar desklet -- recurrence tests");

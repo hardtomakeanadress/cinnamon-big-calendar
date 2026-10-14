@@ -4,7 +4,7 @@
 Used only during development to drive the settings dialog for screenshots.
 Usage: click.py X Y
 """
-import sys
+import argparse
 import time
 
 from Xlib import X, display
@@ -13,6 +13,9 @@ from Xlib.ext import xtest
 
 def click(x, y):
     d = display.Display()
+    if not (0 <= x < d.screen().width_in_pixels and 0 <= y < d.screen().height_in_pixels):
+        d.close()
+        raise SystemExit("Coordinates must be inside the X screen")
     root = d.screen().root
     root.warp_pointer(x, y)
     d.sync()
@@ -27,4 +30,8 @@ def click(x, y):
 
 
 if __name__ == "__main__":
-    click(int(sys.argv[1]), int(sys.argv[2]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("x", type=int)
+    parser.add_argument("y", type=int)
+    args = parser.parse_args()
+    click(args.x, args.y)
