@@ -1,5 +1,13 @@
 BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
 
+REFRESH SETTINGS FOLLOW-UP: Configure -> Events -> Background refresh now has
+presets for 1, 5, 10, 15, 20, 30, 60, 120 and 240 minutes. Five minutes remains
+the default and the user's saved preference. The timer supports one minute,
+bounds invalid settings, and retains asynchronous/coalesced online requests.
+The new regression covers all presets and invalid timer inputs. Refresh (20),
+UI (6) and project (13) checks passed. Live settings-menu selections at one and
+15 minutes rearmed the timer correctly; five minutes was restored afterward.
+
 15 OCTOBER FOLLOW-UP: Disabled calendars remained registered in the live EDS
 service and continued returning cached events. The feed now follows enabled
 and selected sources, checks parent-account enablement, and drops hidden

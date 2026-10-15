@@ -47,8 +47,12 @@ changed. Repeated online refresh requests are limited to one batch per 30 second
 A sync request does not mean the download has finished. Offline or failed calendars
 keep their last successfully loaded events for the displayed range.
 
-The **Calendar refresh interval** controls both online sync requests and local
-recovery checks. Its default is **5 minutes**. Requests are asynchronous and
+The **Background refresh interval** controls both online sync requests and local
+recovery checks. Find it under **Configure → Events → Background refresh**.
+Choose **1, 5, 10, 15, 20 or 30 minutes**, or **1, 2 or 4 hours**. The default
+is **5 minutes**, recommended for timely updates without excessive requests.
+One minute checks more often; longer intervals reduce network activity.
+Requests are asynchronous and
 coalesced, and unchanged events do not trigger redraws. Provider download time
 can vary; no global account synchronization settings are changed.
 
@@ -260,7 +264,7 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
 | Setting | Key | Default |
 |---|---|---|
-| Calendar refresh interval | `event-refresh` | 5 min (5–240) |
+| Background refresh interval | `event-refresh` | 5 min; presets from 1 min to 4 hours |
 
 ### Behaviour
 

@@ -134,7 +134,7 @@ print('(true, \'"restored"\')' if "s.restore();return 'restored'" in sys.argv[-1
             if 'options' in value:self.assertIn(value['default'],value['options'].values(),key)
         self.run_script('tools/make-pot.sh')
         pot=(self.repo/'po'/f'{UUID}.pot').read_text()
-        for text in ['Size and spacing','Calendars','pixels','minutes','(no title)','AM','PM']:
+        for text in ['Size and spacing','Calendars','pixels','Background refresh interval','5 minutes (recommended)','(no title)','AM','PM']:
             self.assertIn('msgid '+json.dumps(text),pot)
 
 if __name__=='__main__':unittest.main(verbosity=2)

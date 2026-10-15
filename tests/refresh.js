@@ -209,6 +209,19 @@ await test('periodic refresh defaults to 300 seconds and requests online sync', 
     assert(callback()===GLib.SOURCE_CONTINUE && requests===1,'timer did not request online sync');
     d._destroyed=true;assert(callback()===GLib.SOURCE_REMOVE && requests===1,'removed desklet requested sync');
 });
+await test('background refresh honors every preset and bounds invalid intervals', async () => {
+    const d=desklet({});let seconds;
+    d._timerAlive=()=>false;
+    stubImports.mainloop.timeout_add_seconds=interval=>{seconds=interval;return 123;};
+    for (const minutes of [1,5,10,15,20,30,60,120,240]) {
+        d.eventRefresh=minutes;d._startEventTimer();
+        assert(seconds===minutes*60,'wrong timer for '+minutes+' minutes');
+    }
+    for (const [value,expected] of [[undefined,300],['bad',300],[Infinity,300],[0,300],[-1,300],[0.5,60],[999,14400]]) {
+        d.eventRefresh=value;d._startEventTimer();
+        assert(seconds===expected,'unsafe timer for '+value);
+    }
+});
 await test('online refresh coalesces callers and rereads local cache once', async () => {
     const pending=deferred();let requests=0,reads=0;
     const d=desklet({refreshRemote(){requests++;return pending.promise;}});
