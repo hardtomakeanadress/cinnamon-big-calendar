@@ -1,5 +1,22 @@
 BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
 
+15 OCTOBER FOLLOW-UP: Disabled calendars remained registered in the live EDS
+service and continued returning cached events. The feed now follows enabled
+and selected sources, checks parent-account enablement, and drops hidden
+connections and cached events. Registry changes trigger the existing update
+path; no polling or dependencies were added. Four new feed regressions pass.
+Live installation verification confirms the disabled calendar's October 15
+event disappeared, the active calendar's separate event remained, and all
+settings (including the five-minute refresh) were preserved.
+
+The expanded private-profile EDS test verifies deselection, calendar disable,
+parent disable and re-enabling, as well as add/edit/delete and moved recurrence.
+All behavioral assertions completed, but the process exited 139 at shutdown.
+Gdb confirms the same native GLib/EDS/GObject/CJS finalization stack described
+below; this integration run is not counted as a passing test. The historical
+limitations about calendar selection below now apply only to a separate
+desklet-specific selector; system calendar selection is respected.
+
 FOLLOW-UP: At the user's request, the refresh interval now defaults to five
 minutes and requests online synchronization as well as checking the cache.
 The header refresh button was removed; an optional manual action remains in

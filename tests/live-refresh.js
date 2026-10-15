@@ -1,5 +1,6 @@
 import GLib from 'gi://GLib';
 import ECal from 'gi://ECal?version=2.0';
+import EDataServer from 'gi://EDataServer?version=1.2';
 import ICal from 'gi://ICalGLib?version=3.0';
 import System from 'system';
 import {CalendarFeed} from '../lib/calendarSource.js';
@@ -21,7 +22,7 @@ await feed.query(start,end);signals=0;
 async function waitForChange(before,expected){
  const begin=GLib.get_monotonic_time();
  for(let i=0;i<100;i++){
-  if(signals>before){const events=await feed.query(start,end,false);if(expected(events)){print('change visible after '+((GLib.get_monotonic_time()-begin)/1000).toFixed(1)+' ms');return;}}
+  if(signals>before){await feed.open();const events=await feed.query(start,end,false);if(expected(events)){print('change visible after '+((GLib.get_monotonic_time()-begin)/1000).toFixed(1)+' ms');return;}}
   await sleep(25);
  }
  throw new Error('Change notification or query failed');
@@ -30,6 +31,36 @@ let before=signals;
 const created=await call('create_object',[component('fixture'),ECal.OperationFlags.NONE]);
 const uid=created[1];
 await waitForChange(before,events=>events.some(e=>e.summary==='fixture'));
+// Change real EDS visibility in this private profile, without removing the
+// fixture. Hidden calendars must lose cached events and reconnect when shown.
+const source=feed._registry.ref_source('system-calendar');
+const selected=source.get_extension('Calendar');
+const writeSource=s=>new Promise((resolve,reject)=>s.write(null,(object,res)=>{
+ try{resolve(object.write_finish(res));}catch(e){reject(e);}
+}));
+// The built-in local parent is read-only. Give this private calendar a
+// writable fixture parent so parent changes travel through the real service.
+const parentUid=GLib.uuid_string_random();
+const parentFixture=EDataServer.Source.new_with_uid(parentUid,null);
+parentFixture.set_display_name('Fixture account');
+await new Promise((resolve,reject)=>feed._registry.commit_source(parentFixture,null,(registry,res)=>{
+ try{resolve(registry.commit_source_finish(res));}catch(e){reject(e);}
+}));
+const parent=feed._registry.ref_source(parentUid);
+if(!parent)throw new Error('Fixture parent was not registered');
+source.set_parent(parentUid);await writeSource(source);
+for(const [label,owner,set] of [
+ ['calendar selection',source,value=>selected.set_selected(value)],
+ ['calendar enabled',source,value=>source.set_enabled(value)],
+ ['parent account enabled',parent,value=>parent.set_enabled(value)]
+]){
+ before=signals;set(false);await writeSource(owner);
+ await waitForChange(before,events=>events.length===0);
+ if(feed._entries.some(e=>e.uid==='system-calendar'))throw new Error(label+' retained connection');
+ before=signals;set(true);await writeSource(owner);
+ await waitForChange(before,events=>events.some(e=>e.summary==='fixture'));
+ print(label+': hidden and restored');
+}
 before=signals;
 await call('modify_object',[component('edited fixture'),ECal.ObjModType.ALL,ECal.OperationFlags.NONE]);
 await waitForChange(before,events=>events.some(e=>e.summary==='edited fixture'));

@@ -14,7 +14,7 @@ there is nothing to log into and no password to give it.
 
 - **Month view** with the day numbers, week numbers (ISO 8601 or North
   American), and weekends tinted in their own colour.
-- **Your events**, from every calendar in Online Accounts: Google, Nextcloud,
+- **Your events**, from enabled, selected calendars in Online Accounts: Google, Nextcloud,
   Microsoft, CalDAV, or a local one. Shown as coloured dots, coloured bars, or
   the event titles themselves — whichever fits your desktop. An event that
   arrives from more than one calendar — a shared invitation, or a calendar
@@ -273,9 +273,10 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
 These are real and worth knowing before you rely on the desklet.
 
-- **All calendars are shown, with no per-calendar filter.** There is no way yet
-  to hide, say, a birthday calendar while keeping your work one. The
-  `show-events` setting is all-or-nothing.
+- **Calendar visibility follows the system calendar settings.** Disabled or
+  deselected calendars, including calendars under disabled accounts, are hidden.
+  There is no separate per-calendar selection in the desklet; `show-events`
+  hides all events.
 - **Some recurrence formats remain unsupported.** Expansion uses one RRULE;
   RDATE-only schedules and multiple RRULEs are not fully supported. A safety
   cap of 5,000 recurrence steps can also omit occurrences of very old or

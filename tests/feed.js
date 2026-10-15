@@ -116,9 +116,14 @@ await testAsync("a failed connection is retried, and succeeds the second time", 
     assertEqual(feed.calendars.map(c => c.uid), ["a"], "the calendar is there");
 });
 
-/** A source list, in the shape _openAll() reads: only get_uid() is used. */
-const registryOf = (uids) => ({
-    list_sources: () => uids.map(uid => ({ get_uid: () => uid }))
+/** Local registry state, including visibility retained for disabled sources. */
+const registryOf = (uids, { disabled = [], deselected = [], disabledParent = [] } = {}) => ({
+    list_sources: () => uids.map(uid => ({
+        get_uid: () => uid,
+        get_extension: () => ({ get_selected: () => !deselected.includes(uid) })
+    })),
+    check_enabled: source => !disabled.includes(source.get_uid()) &&
+        !disabledParent.includes(source.get_uid())
 });
 
 await testAsync("a reconnect keeps the calendars that are already up", async () => {
@@ -147,6 +152,32 @@ await testAsync("a calendar whose account was removed is dropped", async () => {
     await feed._openAll(registryOf(["still-there"]));
 
     assertEqual(feed.calendars.map(c => c.uid), ["still-there"], "only the live one");
+});
+
+for (const reason of ["disabled", "deselected", "disabledParent"]) {
+    await testAsync(reason + " calendars lose cached events and signal handlers", async () => {
+        const feed = new CalendarFeed();
+        const disconnected = [];
+        const removed = CAL("hidden");
+        removed.client = { disconnect: id => disconnected.push(id) };
+        removed.signals = [41, 42];
+        removed.cached = { start: 0, end: 100, events: [{ uid: "stale" }] };
+        feed._entries = [CAL("visible"), removed];
+        await feed._openAll(registryOf(["visible", "hidden"], { [reason]: ["hidden"] }));
+        assertEqual(feed.calendars.map(c => c.uid), ["visible"], "only visible calendar remains");
+        assertEqual(disconnected, [41, 42], "old client listeners disconnected");
+        feed.destroy();
+    });
+}
+
+await testAsync("hiding the last calendar clears the event results", async () => {
+    const feed = new CalendarFeed();
+    const entry = CAL("last");
+    entry.cached = { start: 0, end: 100, events: [{ uid: "stale" }] };
+    feed._entries = [entry];
+    await feed._openAll(registryOf(["last"], { disabled: ["last"] }));
+    assertEqual(await feed.query(0, 100, false), [], "cached event is no longer returned");
+    feed.destroy();
 });
 
 /* ---------------------------------------------------------------- */
