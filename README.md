@@ -169,6 +169,19 @@ The only `https://` strings in the source are the licence headers.
 
 All of these are in the desklet's **Configure** dialog, sorted into four pages.
 
+Scroll with the mouse wheel or touchpad to move the page, including when the
+pointer is over a slider, number field or dropdown. Change those controls by
+clicking, dragging or using the keyboard.
+
+A white outline stays visible around the desklet, including when Configure is
+closed. Adjust **Appearance → Background → Border thickness / Border colour**;
+set thickness to zero to hide it. Background transparency does not tint the
+outline, and opening Configure no longer adds Cinnamon’s red fill behind it.
+
+**Behaviour → Defaults → Reset all settings to defaults** restores the
+desklet’s appearance, layout, events and behaviour preferences, including
+five-minute background refresh. It does not change calendar accounts or events.
+
 ### Appearance
 
 **Size and spacing**
@@ -186,8 +199,8 @@ All of these are in the desklet's **Configure** dialog, sorted into four pages.
 | Background colour | `bg-color` | `#303036` |
 | Background opacity | `bg-opacity` | 85 % (0–100) |
 | Corner radius of the calendar | `corner-radius` | 14 px (0–60) |
-| Border thickness | `border-width` | 0 px (0–10) |
-| Border colour | `border-color` | `#3c3c44` |
+| Border thickness | `border-width` | 2 px (0–10; 0 hides it) |
+| Border colour | `border-color` | white at 55% opacity |
 | Draw grid lines between days | `show-grid-lines` | off |
 | Grid line colour | `grid-line-color` | `#3c3c44` |
 
@@ -308,6 +321,7 @@ cjs -m tests/feed.js              # connecting, reconnecting and deduplication
 cjs -m tests/refresh.js           # notifications, failures, query queue and rendering
 cjs -m tests/ui.js                # input-region and tooltip regression checks
 python3 tests/project.py          # installation, removal, packaging, translations and screenshots in temporary directories
+python3 tests/settings-ui.py     # GTK scroll routing and reset using temporary settings
 bash tests/isolated-refresh.sh    # real add/edit/delete notifications in a temporary EDS profile
 cjs -m tests/integration.js       # reads the real evolution-data-server on this machine
 ./install.sh --check              # can this machine run the desklet?

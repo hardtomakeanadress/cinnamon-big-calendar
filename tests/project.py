@@ -75,6 +75,7 @@ exec /usr/bin/mv "$@"
         self.assertFalse((self.dest/'lib/old.js').exists());self.assertEqual((self.dest/'custom.txt').read_text(),'keep me')
         backups=list(self.dest.parent.glob('.*.previous'));self.assertEqual(len(backups),1)
         self.assertEqual((backups[0]/'desklet.js').read_text(),'old code')
+        self.assertEqual((self.dest/'settingsWidgets.py').read_bytes(),(ROOT/'settingsWidgets.py').read_bytes())
     def test_bad_desklet_list_never_written_or_uninstalled(self):
         for raw in ['broken', '{}', '[1]']:
             self.state.write_text(raw);before=self.tree()
@@ -102,6 +103,7 @@ exec /usr/bin/mv "$@"
         import zipfile
         with zipfile.ZipFile(archive) as z:
             self.assertIn(f'{UUID}/screenshot.png',z.namelist())
+            self.assertIn(f'{UUID}/settingsWidgets.py',z.namelist())
             for lib in ('calendarUtils','eventIndex','calendarSource'):self.assertIn(f'{UUID}/lib/{lib}.js',z.namelist())
         self.mock('zip','#!/bin/sh\nexit 1\n');self.run_script('tools/make-dist.sh',ok=False)
         self.assertEqual(archive.read_bytes(),before)
@@ -126,8 +128,16 @@ print('(true, \'"restored"\')' if "s.restore();return 'restored'" in sys.argv[-1
             for section in layout[page]['sections']:visible.extend(layout[section]['keys'])
         self.assertEqual(len(visible),len(set(visible)))
         bindings=set(re.findall(r's.bind\("([^"]+)"',(ROOT/'desklet.js').read_text()))
-        self.assertEqual(bindings,set(schema)-{'layout','last-view'})
-        self.assertEqual(set(visible),bindings)
+        self.assertEqual(bindings,{k for k,v in schema.items() if 'default' in v}-{'last-view'})
+        self.assertEqual({schema[k].get('setting',k) for k in visible}-{'reset-settings'},bindings)
+        for key,value in schema.items():
+            if value.get('type') in ('scale','spinbutton','combobox'):
+                wrapper=schema[key+'-control']
+                self.assertIn(key+'-control',visible)
+                self.assertNotIn(key,visible)
+                self.assertEqual(wrapper['setting'],key)
+                self.assertEqual(wrapper.get('dependency'),value.get('dependency'))
+                self.assertTrue((ROOT/wrapper['file']).is_file())
         for key,value in schema.items():
             if key=='layout':continue
             if 'min' in value:self.assertTrue(value['min']<=value['default']<=value['max'],key)

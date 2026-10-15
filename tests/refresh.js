@@ -118,6 +118,25 @@ function desklet(feed) {
     d._firstDayOfWeek=()=>1; d._render=()=>d.renders++;
     return d;
 }
+await test('settings upgrades preserve valid numeric endpoints without changing Cinnamon globally', async () => {
+    const checked=[];
+    class NativeSettings {
+        constructor() {
+            for (const type of ['scale','spinbutton']) {
+                for (const value of [0,100,50,-1,101,NaN,'100'])
+                    checked.push(this._checkSanity(value,{type,min:0,max:100}));
+            }
+            checked.push(this._checkSanity('dots',{type:'combobox'}));
+        }
+        _checkSanity(value,setting) { return setting.type==='combobox'; }
+        bind() {}
+    }
+    stubImports.ui.settings.DeskletSettings=NativeSettings;
+    const d=desklet(null);d.metadata={uuid:'bigCalendar@adis'};
+    d._bindSettings();
+    assert(JSON.stringify(checked)===JSON.stringify([true,true,true,false,false,false,false,true,true,true,false,false,false,false,true]),'numeric endpoints lost or invalid values accepted');
+    assert(!NativeSettings.prototype._checkSanity(0,{type:'scale'}),'global settings class changed');
+});
 await test('rapid requests serialize queries and apply only the latest view', async () => {
     const pending=[]; let active=0,maxActive=0;
     const feed={open:async()=>{},query:async()=>{

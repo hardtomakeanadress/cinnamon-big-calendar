@@ -25,7 +25,7 @@ STAGE=$(mktemp -d "$ROOT/dist/.release.XXXXXX")
 ARCHIVE="$STAGE/$UUID.zip"
 trap 'rm -rf "$STAGE"' EXIT
 
-FILES=(desklet.js metadata.json settings-schema.json stylesheet.css icon.png
+FILES=(desklet.js metadata.json settings-schema.json settingsWidgets.py stylesheet.css icon.png
        LICENSE README.md screenshot.png install.sh)
 
 # Everything the desklet cannot start without. Checked before the archive is

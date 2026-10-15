@@ -48,7 +48,7 @@ AUTHOR="hardtomakeanadress"
 # less install.sh: in the catalogue Cinnamon does the installing, and a script
 # that copies files into ~/.local/share/cinnamon is not something a reviewer
 # should have to read past.
-FILES=(desklet.js metadata.json settings-schema.json stylesheet.css icon.png
+FILES=(desklet.js metadata.json settings-schema.json settingsWidgets.py stylesheet.css icon.png
        LICENSE)
 
 for f in "${FILES[@]}" tools/spice-README.md screenshot.png \

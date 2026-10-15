@@ -1,5 +1,19 @@
 BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
 
+SETTINGS FOLLOW-UP: Big Calendar now uses Cinnamon custom controls to forward
+wheel and smooth-scroll events to the page, preserving native value bindings
+and click/drag/keyboard editing. Numeric/choice setting keys and values are
+unchanged. A visible Behaviour -> Defaults reset button uses Cinnamon’s
+existing reset action. GTK tests use temporary settings and cover sliders,
+numbers, dropdowns, focus, page edges, normal edits and default restoration.
+The installer and both package builders include settingsWidgets.py. This
+module runs only in the settings window; desktop polling is unchanged.
+Cinnamon’s schema upgrade also rejected valid numeric endpoints; a local
+settings subclass now preserves them, verified with 100% opacity. The red
+Configure highlight behind transparent content is suppressed. The requested
+permanent white outline uses the existing border colour/thickness settings,
+with defaults of two pixels and white at 55% opacity; zero hides it.
+
 REFRESH SETTINGS FOLLOW-UP: Configure -> Events -> Background refresh now has
 presets for 1, 5, 10, 15, 20, 30, 60, 120 and 240 minutes. Five minutes remains
 the default and the user's saved preference. The timer supports one minute,

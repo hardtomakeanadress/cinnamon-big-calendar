@@ -53,4 +53,22 @@ test('tooltip placement follows pointer monitor, not its previous position',()=>
     t._place();assert(pos[0]>=1920&&pos[0]+200<=3840,'wrong monitor');
     t._pointer=[3835,1075];t._place();assert(pos[0]+200<=3840&&pos[1]+100<=1080,'tooltip overflow');
 });
+test('editing highlight does not put a colored fill behind transparent content', () => {
+    const d=Object.create(DeskletClass.prototype);
+    let contentHighlight=true;
+    d.content={change_style_pseudo_class(name,value){assert(name==='highlight');contentHighlight=value;}};
+    d.highlight(true);assert(!contentHighlight,'red container highlight retained');
+    d.highlight(false);assert(!contentHighlight,'red container highlight remained');
+    d._root=null;d.highlight(true);assert(!contentHighlight,'early highlight tinted loading content');
+});
+test('configurable outline is independent of fill opacity and can be hidden', () => {
+    const d=Object.create(DeskletClass.prototype);let css;
+    Object.assign(d,{bgColor:'#241f31',bgOpacity:50,cornerRadius:14,outerPadding:16,borderWidth:2,borderColor:'rgba(255,255,255,0.55)'});
+    d._basePoints=()=>12;d._root={set_style(value){css=value;}};
+    d._applyRootStyle();
+    assert(css.includes('rgba(36, 31, 49, 0.50)') && css.includes('box-shadow: 0 0 0 2px rgba(255,255,255,0.55)'), 'fill or outline wrong');
+    d.borderWidth=4;d.borderColor='#0088ff';d._applyRootStyle();
+    assert(css.includes('box-shadow: 0 0 0 4px #0088ff'), 'outline controls ignored');
+    d.borderWidth=0;d._applyRootStyle();assert(!css.includes('box-shadow') && !css.includes(' border:'), 'outline could not be hidden');
+});
 print('UI tests passed: '+passed);

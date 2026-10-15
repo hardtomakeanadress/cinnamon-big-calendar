@@ -285,7 +285,7 @@ stage_install() {
     local parent stage backup f
     parent=$(dirname "$DEST")
     [[ ! -L "$DEST" ]] || die "refusing to replace a symlink: $DEST"
-    for f in desklet.js metadata.json settings-schema.json stylesheet.css icon.png LICENSE \
+    for f in desklet.js metadata.json settings-schema.json settingsWidgets.py stylesheet.css icon.png LICENSE \
         lib/calendarUtils.js lib/eventIndex.js lib/calendarSource.js; do
         [[ -f "$SRC/$f" ]] || die "missing source file: $f; existing install untouched"
     done
@@ -308,7 +308,7 @@ PYEOF
     rm -rf "$stage/lib"
     mkdir "$stage/lib"
     # Remove only staged copies first, so cp cannot follow a preexisting symlink.
-    for f in desklet.js metadata.json settings-schema.json stylesheet.css icon.png LICENSE; do
+    for f in desklet.js metadata.json settings-schema.json settingsWidgets.py stylesheet.css icon.png LICENSE; do
         rm -f -- "$stage/$f"
         cp "$SRC/$f" "$stage/$f"
     done
