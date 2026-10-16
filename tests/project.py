@@ -57,6 +57,107 @@ else:
     def tree(self):
         return {str(p.relative_to(self.dest)):hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in self.dest.rglob('*') if p.is_file()}
+    def installer_probe(self, command):
+        # Source the real functions, replacing only desktop detection/reload.
+        source=(self.repo/'install.sh').read_text().split('[[ $# -le 1 ]]')[0]
+        (self.repo/'probe.sh').write_text(source+'\ncinnamon_running() { return 0; }\n'
+            +'reload_running() { return 0; }\n'+command+'\n')
+        return 'probe.sh'
+    def test_unknown_version_is_not_reported_as_absent_cinnamon(self):
+        self.mock('cinnamon','#!/bin/sh\necho Cinnamon unknown-version\n')
+        result=self.run_script('install.sh','--check',ok=False)
+        self.assertIn('could not determine the installed Cinnamon version',result.stdout)
+        self.assertNotIn('Cinnamon is not installed',result.stdout)
+    def test_library_probe_distinguishes_missing_libraries_and_unusable_runtime(self):
+        for code,expected in [(3,'calendar libraries the desklet'),(126,'could not run the library check')]:
+            self.mock('cjs',f'#!/bin/sh\nexit {code}\n')
+            result=self.run_script('install.sh','--check',ok=False)
+            self.assertIn(expected,result.stdout)
+    def test_repeated_install_keeps_only_latest_recovery_copy(self):
+        for number in range(3):
+            (self.dest/'desklet.js').write_text(f'old {number}')
+            self.run_script('install.sh')
+            backups=list(self.dest.parent.glob('.*.previous'))
+            self.assertEqual(len(backups),1)
+            self.assertEqual((backups[0]/'desklet.js').read_text(),f'old {number}')
+    def test_repeated_spices_build_keeps_one_backup_and_failure_preserves_build(self):
+        for _ in range(3):self.run_script('tools/make-spice.sh')
+        backups=list((self.repo/'dist/spice').glob('.build.*.previous'))
+        self.assertEqual(len(backups),1)
+        built=self.repo/'dist/spice'/UUID/'files'/UUID/'desklet.js'
+        before=built.read_bytes()
+        self.mock('xgettext','#!/bin/sh\necho failed >&2\nexit 1\n')
+        self.run_script('tools/make-spice.sh',ok=False)
+        self.assertEqual(built.read_bytes(),before)
+        self.assertTrue(backups[0].exists())
+    def test_malformed_list_preflight_preserves_installed_files(self):
+        self.state.write_text('broken');before=self.tree()
+        self.run_script(self.installer_probe('do_install'),ok=False)
+        self.assertEqual(self.tree(),before)
+        self.assertFalse(self.writes.exists())
+    def test_enable_failure_rolls_back_files(self):
+        self.state.write_text("['other:1:10:20']");before=self.tree()
+        result=self.run_script(self.installer_probe('do_install'),ok=False,env={'TEST_LOCKED':'1'})
+        self.assertEqual(self.tree(),before)
+        self.assertIn('installed files were rolled back',result.stdout)
+    def test_existing_entry_does_not_rewrite_the_list(self):
+        before=self.state.read_text()
+        self.run_script(self.installer_probe('edit_enabled add'))
+        self.assertEqual(self.state.read_text(),before)
+        self.assertFalse(self.writes.exists())
+    def test_enabled_list_retries_a_concurrent_move_and_add(self):
+        self.state.write_text("['other:1:10:20']")
+        self.mock('gsettings','''#!/usr/bin/python3
+import os,sys
+from pathlib import Path
+state=Path(os.environ['TEST_ENABLED']);marker=Path(os.environ['TEST_WRITES'])
+if sys.argv[1]=='get':
+ print(state.read_text())
+ if not marker.exists():
+  marker.write_text('changed')
+  state.write_text("['other:1:999:999', 'new:2:1:1']")
+else:state.write_text(sys.argv[-1])
+''')
+        self.run_script(self.installer_probe('edit_enabled add'))
+        self.assertEqual(json.loads(self.state.read_text()),['other:1:999:999','new:2:1:1',UUID+':3:400:200'])
+    def test_screenshot_expiry_never_publishes_or_reports_success(self):
+        self.mock('gdbus','''#!/usr/bin/python3
+import sys
+from pathlib import Path
+if 'org.Cinnamon.ScreenshotArea' in sys.argv:
+ Path(sys.argv[-1]).write_bytes(b'invalid capture after recovery')
+ print('(true,)')
+elif "s.restore();return 'restored'" in sys.argv[-1]:print('(true, \\'"nothing"\\')')
+else:print('(true, \\'"500x400"\\')')
+''')
+        out=self.base/'expired.png'
+        result=self.run_script('shot.sh',str(out),ok=False)
+        self.assertFalse(out.exists());self.assertNotIn('Wrote ',result.stdout)
+        self.assertIn('Capture expired',result.stdout)
+    def test_screenshot_success_restores_before_publication(self):
+        out=self.base/'success.png';self.env['TEST_OUTPUT']=str(out)
+        self.mock('gdbus','''#!/usr/bin/python3
+import os,sys
+from pathlib import Path
+if 'org.Cinnamon.ScreenshotArea' in sys.argv:
+ Path(sys.argv[-1]).write_bytes(b'valid synthetic capture')
+ print('(true,)')
+elif "s.restore();return 'restored'" in sys.argv[-1]:
+ assert not Path(os.environ['TEST_OUTPUT']).exists()
+ print('(true, \\'"restored"\\')')
+else:print('(true, \\'"500x400"\\')')
+''')
+        result=self.run_script('shot.sh',str(out))
+        self.assertEqual(out.read_bytes(),b'valid synthetic capture');self.assertIn('Wrote ',result.stdout)
+    def test_runner_distinguishes_skipped_and_failed_suites(self):
+        # Isolate orchestration from the suites themselves, including this file.
+        (self.repo/'tests/project.py').write_text('pass\n')
+        for code,outcome in [(77,'SKIP=18'),(139,'FAIL=18')]:
+            self.mock('cjs',f'#!/bin/sh\nexit {code}\n')
+            result=subprocess.run(['python3','tests/run.py'],cwd=self.repo,env=self.env,
+                text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=15)
+            self.assertEqual(result.returncode,77 if code==77 else 1,result.stdout)
+            self.assertIn(outcome,result.stdout)
     def test_missing_source_preserves_install(self):
         before=self.tree();(self.repo/'lib/calendarUtils.js').unlink()
         self.run_script('install.sh',ok=False);self.assertEqual(self.tree(),before)
@@ -128,6 +229,12 @@ print('(true, \'"restored"\')' if "s.restore();return 'restored'" in sys.argv[-1
             for section in layout[page]['sections']:visible.extend(layout[section]['keys'])
         self.assertEqual(len(visible),len(set(visible)))
         bindings=set(re.findall(r's.bind\("([^"]+)"',(ROOT/'desklet.js').read_text()))
+        desklet_source=(ROOT/'desklet.js').read_text()
+        palette=json.loads(re.search(r'const COLOR_DEFAULTS = (\{.*?\});',desklet_source,re.S)[1])
+        expected={prop:schema[key]['default'] for key,prop in re.findall(r's.bind\("([^"]+)", "([^"]+)"',desklet_source)
+                  if schema[key].get('type')=='colorchooser'}
+        self.assertEqual(palette,expected)
+
         self.assertEqual(bindings,{k for k,v in schema.items() if 'default' in v}-{'last-view'})
         self.assertEqual({schema[k].get('setting',k) for k in visible}-{'reset-settings'},bindings)
         for key,value in schema.items():

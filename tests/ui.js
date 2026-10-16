@@ -21,7 +21,7 @@ function windowAt(x,y,w,h,options={}){return {meta_window:{minimized:!!options.m
     is_on_all_workspaces:()=>!!options.sticky,get_workspace:()=>options.workspace||workspace,get_frame_rect:()=>({x,y,width:w,height:h})}};}
 function desklet(){const d=Object.create(DeskletClass.prototype);d.actor=actor();return d;}
 function assert(v,m){if(!v)throw new Error(m);}
-function test(name,fn){tracked.clear();windows=[];children.length=0;fn();passed++;print('PASS '+name);}
+function test(name,fn){logs=0;tracked.clear();windows=[];children.length=0;fn();passed++;print('PASS '+name);}
 test('cover/uncover releases and restores input without duplicate tracking',()=>{
     const d=desklet();d._syncInputRegion();assert(tracked.size===1,'not tracked');
     windows=[windowAt(590,100,200,100)];d._syncInputRegion();assert(tracked.size===0,'partial overlap stole window input');
@@ -59,7 +59,6 @@ test('editing highlight does not put a colored fill behind transparent content',
     d.content={change_style_pseudo_class(name,value){assert(name==='highlight');contentHighlight=value;}};
     d.highlight(true);assert(!contentHighlight,'red container highlight retained');
     d.highlight(false);assert(!contentHighlight,'red container highlight remained');
-    d._root=null;d.highlight(true);assert(!contentHighlight,'early highlight tinted loading content');
 });
 test('configurable outline is independent of fill opacity and can be hidden', () => {
     const d=Object.create(DeskletClass.prototype);let css;

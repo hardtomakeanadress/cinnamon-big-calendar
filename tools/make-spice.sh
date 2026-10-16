@@ -176,6 +176,10 @@ if ! mv -T "$OUT" "$DEST"; then
     [[ ! -d "$STAGE.previous" ]] || mv -T "$STAGE.previous" "$DEST"
     exit 1
 fi
+# Keep only the previous successful build after the replacement succeeded.
+for old in "$ROOT"/dist/spice/.build.??????.previous; do
+    [[ "$old" == "$STAGE.previous" || ! -d "$old" || -L "$old" ]] || rm -rf -- "$old"
+done
 OUT="$DEST"
 printf '%s/  (%s files)\n' "$OUT" "$(find "$OUT" -type f | wc -l)"
 echo

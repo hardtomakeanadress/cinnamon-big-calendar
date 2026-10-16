@@ -1,3 +1,4 @@
+import { requireCalendarLibraries } from './require-calendar.js';
 /* Timezone regression tests for the event reader.
  *
  *   cjs -m tests/timezone.js
@@ -44,19 +45,10 @@ function assertEqual(actual, expected, label) {
 }
 
 let ECal, CalendarFeed;
-try {
-    ECal = (await import("gi://ECal?version=2.0")).default;
-    ({ CalendarFeed } = await import("../lib/calendarSource.js"));
-} catch (e) {
-    print("");
-    print("  Big Calendar desklet -- timezone tests");
-    print("  " + "=".repeat(46));
-    print("");
-    print("  SKIPPED: the calendar libraries are not installed here.");
-    print("  (" + e.message + ")");
-    print("");
-    throw new Error("");   // no libecal, no test
-}
+await requireCalendarLibraries();
+ECal = (await import("gi://ECal?version=2.0")).default;
+({ CalendarFeed } = await import("../lib/calendarSource.js"));
+
 
 const feed = new CalendarFeed();
 const ENTRY = { uid: "cal-1", name: "Test", color: "#9a9cff" };

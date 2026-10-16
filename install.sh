@@ -41,7 +41,9 @@ warn() { printf '%s!%s %s\n' "$YELLOW" "$OFF" "$*"; }
 # the two drift apart the first time the requirement changes.
 cinnamon_version() {
     command -v cinnamon >/dev/null 2>&1 || return 1
-    cinnamon --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
+    local banner
+    banner=$(cinnamon --version 2>/dev/null) || return 2
+    printf '%s\n' "$banner" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || return 2
 }
 
 # Every requirement in metadata.json, one per line.
@@ -97,15 +99,21 @@ typelibs_check() {
     probe=$(mktemp --suffix=.js 2>/dev/null) || return 2
 
     cat > "$probe" <<'EOF' || { rm -f "$probe"; return 2; }
-import ECal from 'gi://ECal?version=2.0';
-import EDataServer from 'gi://EDataServer?version=1.2';
-import ICalGLib from 'gi://ICalGLib?version=3.0';
-if (!ECal.Client || !EDataServer.SourceRegistry || !ICalGLib.Time || !ICalGLib.Timezone)
-    throw new Error("a namespace imported but its classes are missing");
+import System from 'system';
+try {
+    const {default: ECal} = await import('gi://ECal?version=2.0');
+    const {default: EDataServer} = await import('gi://EDataServer?version=1.2');
+    const {default: ICalGLib} = await import('gi://ICalGLib?version=3.0');
+    if (!ECal.Client || !EDataServer.SourceRegistry || !ICalGLib.Time || !ICalGLib.Timezone)
+        throw new Error("missing calendar classes");
+} catch (e) {
+    System.exit(3); // The runtime worked; a required calendar namespace did not.
+}
 EOF
 
     [[ -s "$probe" ]] || { rm -f "$probe"; return 2; }
-    cjs -m "$probe" >/dev/null 2>&1 || rc=1
+    cjs -m "$probe" >/dev/null 2>&1 || rc=$?
+    case $rc in 0) ;; 3) rc=1 ;; *) rc=2 ;; esac
     rm -f "$probe"
     return $rc
 }
@@ -137,8 +145,10 @@ PYEOF
 # --- Checks ---------------------------------------------------------------
 
 check_machine() {
-    local have want
-    have=$(cinnamon_version) || die "Cinnamon is not installed on this machine.
+    local have want version_rc=0
+    have=$(cinnamon_version) || version_rc=$?
+    [[ $version_rc != 2 ]] || die "could not determine the installed Cinnamon version."
+    [[ $version_rc != 1 ]] || die "Cinnamon is not installed on this machine.
        This is a Cinnamon desklet: it draws with Cinnamon's own toolkit (St)
        and only runs inside the Cinnamon desktop. On GNOME, KDE or XFCE it
        cannot run at all."
@@ -156,7 +166,7 @@ check_machine() {
     typelibs_check || rc=$?
     case $rc in
         0) ok "calendar libraries present" ;;
-        2) die "could not run the library check: no usable temporary directory
+        2) die "could not run the library check. Check that cjs runs and TMPDIR is usable
        (TMPDIR=${TMPDIR:-unset}). Nothing was installed." ;;
         *) die "the calendar libraries the desklet reads events with are missing.
        Install them with:
@@ -196,15 +206,16 @@ check_machine() {
 # spices/<uuid>/<instance>.json. Raising the limit would move the settings and
 # strand the old file, so they would have to be carried across by hand.
 edit_enabled() {
-    local mode="$1" current updated
-    current=$(gsettings get org.cinnamon enabled-desklets) \
-        || die "could not read the desklet list (gsettings get org.cinnamon enabled-desklets)"
+    local mode="$1" current updated latest attempt
+    for attempt in 1 2 3 4 5; do
+        current=$(gsettings get org.cinnamon enabled-desklets) \
+            || die "could not read the desklet list (gsettings get org.cinnamon enabled-desklets)"
 
-    updated=$(printf '%s' "$current" | python3 -c '
+        updated=$(printf '%s' "$current" | python3 -c '
 import ast, json, sys
 
 uuid, mode, x, y = sys.argv[1:5]
-raw = sys.stdin.read().strip()
+original = raw = sys.stdin.read().strip()
 
 # An empty list arrives as the typed form "@as []".
 if raw.startswith("@as "):
@@ -219,6 +230,7 @@ if not isinstance(items, list) or not all(isinstance(i, str) for i in items):
 def is_mine(item):
     return item.split(":", 1)[0].lstrip("!") == uuid
 
+before = list(items)
 mine = [i for i in items if is_mine(i)]
 others = [i for i in items if not is_mine(i)]
 
@@ -243,11 +255,21 @@ else:
 # writes a control character as \x01, which GVariant takes as four literal
 # characters, so a uuid containing one would be rewritten and another desklet
 # silently disabled. json writes \u0001, which GVariant understands.
-sys.stdout.write(json.dumps(items))
-' "$UUID" "$mode" "$FIRST_X" "$FIRST_Y") || die "could not work out the new desklet list"
+sys.stdout.write(original if items == before else json.dumps(items))
+    ' "$UUID" "$mode" "$FIRST_X" "$FIRST_Y") || die "could not work out the new desklet list"
 
-    gsettings set org.cinnamon enabled-desklets "$updated" \
-        || die "could not write the desklet list"
+        [[ "$mode" != check ]] || return 0
+        # Avoid rewriting the list when this operation has nothing to change.
+        [[ "$current" != "$updated" ]] || return 0
+        latest=$(gsettings get org.cinnamon enabled-desklets) || die "could not re-read the desklet list"
+        [[ "$latest" == "$current" ]] || continue
+        # GSettings has no compare-and-swap. This reduces, but cannot eliminate,
+        # the race with a Cinnamon write between this check and set.
+        gsettings set org.cinnamon enabled-desklets "$updated" \
+            || die "could not write the desklet list"
+        return 0
+    done
+    die "desklet list kept changing; try again when desklets are not being moved"
 }
 
 # --- Compiling translations ----------------------------------------------
@@ -363,21 +385,41 @@ do_install() {
        somewhere else and run it from there."
     fi
 
+    local running=false
+    if cinnamon_running; then
+        running=true
+        edit_enabled check
+    fi
     stage_install
     ok "installed to $DEST"
 
-    install_translations
-
-    if cinnamon_running; then
-        edit_enabled add
+    if $running; then
+        if ! (edit_enabled add); then
+            # No reload occurred. Restore the old files on enable failure.
+            mv -T "$DEST" "$INSTALL_STAGE.failed"
+            if [[ -d "$INSTALL_BACKUP" ]]; then mv -T "$INSTALL_BACKUP" "$DEST"; fi
+            rm -rf -- "$INSTALL_STAGE.failed"
+            die "could not enable the desklet; installed files were rolled back"
+        fi
+        install_translations
         reload_running
         ok "enabled on the desktop"
         printf '\n%sDone.%s The calendar should be on your desktop now.\n' "$BOLD" "$OFF"
         note "Right-click it and choose Configure for its settings."
         note "No events? Add your Google account in Online Accounts."
     else
+        install_translations
         printf '\n%sFiles installed.%s Enable it in Add desklets when you are on the desktop.\n' \
             "$BOLD" "$OFF"
+    fi
+
+    # Keep one recovery copy, only pruning older successful installations once
+    # this installation is complete. Never remove unrelated directories.
+    if [[ -d "$INSTALL_BACKUP" ]]; then
+        local old
+        for old in "$(dirname "$DEST")/.$UUID.stage."??????.previous; do
+            [[ "$old" == "$INSTALL_BACKUP" || ! -d "$old" || -L "$old" ]] || rm -rf -- "$old"
+        done
     fi
 
     # A few words about what was just installed, since "installer ran a script"

@@ -15,6 +15,7 @@
 
 // Relative specifiers resolve against this file's own URL, so the suite runs
 // from any checkout rather than only the author's home directory.
+import GLib from 'gi://GLib';
 import * as C from "../lib/calendarUtils.js";
 import * as E from "../lib/eventIndex.js";
 
@@ -334,13 +335,12 @@ test("isToday is exact across every cell of every month", () => {
     // legitimately appear as a leading or trailing day. The invariant is
     // not "only in its own month" but "if and only if the date matches".
     const today = new Date(2026, 8, 30);
-    const tk = C.dayKey(today);
     for (let y = 2026; y <= 2026; y++) {
         for (let mo = 7; mo <= 10; mo++) {
             const m = C.buildMonthMatrix(y, mo, 1, { rows: 6, today: today });
             for (const week of m) {
                 for (const cell of week.days) {
-                    const isToday = C.dayKey(cell.date) === tk;
+                    const isToday = cell.year === 2026 && cell.month === 8 && cell.day === 30;
                     assertEqual(cell.isToday, isToday,
                         "mismatch at " + cell.year + "-" + (cell.month + 1) + "-" + cell.day);
                 }
@@ -364,8 +364,9 @@ test("weekends are flagged correctly", () => {
     const m = C.buildMonthMatrix(2026, 8, 1, { rows: 6, today: new Date(2026, 8, 30) });
     for (const week of m) {
         for (const cell of week.days) {
-            const wd = C.weekdayOf(cell.year, cell.month, cell.day);
-            assertEqual(cell.isWeekend, wd === 0 || wd === 6,
+            // September 2026 starts on Tuesday: fixture dates, not the production weekday helper.
+            const weekend = {7:[29,30],8:[5,6,12,13,19,20,26,27],9:[3,4,10,11]};
+            assertEqual(cell.isWeekend, weekend[cell.month].includes(cell.day),
                 cell.year + "-" + (cell.month + 1) + "-" + cell.day);
         }
     }
@@ -655,6 +656,10 @@ test("an event whose end date falls before its start date stays on one day", () 
     // MAX_SPAN_DAYS days and never covered the day it was actually on.
     const start = new Date(2009, 10, 1, 0, 0, 0).getTime();   // local Nov 1
     const end = start + 30 * 60000;
+    if (GLib.getenv('TZ') === 'America/Goose_Bay') {
+        assertTrue(E.dayOfEventEnd({start,end,allDay:false}) < E.dayOfEventStart({start,end,allDay:false}),
+            'fixture must actually cross back into the preceding date');
+    }
     const index = E.buildEventIndex([
         { summary: "Fall back", allDay: false, start: start, end: end, color: "#fff" }
     ]);
@@ -737,6 +742,37 @@ test("locale fallback uses standard regions and ignores extension keys", () => {
     assertEqual(C.firstDayOfWeekForLocale("zh-CN"),1,"China");
     assertEqual(C.firstDayOfWeekForLocale("dv-MV"),5,"Maldives");
     assertEqual(C.regionFromLocale("ro-u-ca-gregory"),"","calendar extension is not Canada");
+});
+
+test("civil helper boundaries and month-grid range have explicit expected dates", () => {
+    assertEqual(C.sameDay(new Date(2026,9,16,0),new Date(2026,9,16,23)),true);
+    assertEqual(C.sameDay(new Date(2026,9,16),new Date(2025,9,16)),false);
+    assertEqual(C.isWeekendDate(2026,9,17),true);
+    assertEqual(C.isWeekendDate(2026,9,18),true);
+    assertEqual(C.isWeekendDate(2026,9,19),false);
+    const range=C.gridRange(2026,9,1,6);
+    assertEqual([range.start.getFullYear(),range.start.getMonth(),range.start.getDate()],[2026,8,28]);
+    assertEqual([range.end.getFullYear(),range.end.getMonth(),range.end.getDate()],[2026,10,9]);
+    assertEqual(C.weekNumberFor(2021,0,1,'iso'),{week:53,year:2020});
+    assertEqual(C.weekNumberFor(2026,0,4,'us'),{week:2,year:2026});
+    assertEqual(C.weekNumberFor(2026,0,4,'none'),null);
+    const matrix=C.buildMonthMatrix(2026,9,1,{rows:6,weekNumbering:'iso'});
+    assertEqual(matrix.map(row=>row.week.week),[40,41,42,43,44,45]);
+});
+test("year-first formatting and invalid-locale fallback",()=>{
+    assertEqual(C.formatMonthYear(2026,9,'en-US','year-first'),'2026 October');
+    const options={year:'numeric',month:'long'};
+    assertEqual(C.getFormatter('invalid_locale!',options).format(new Date(2026,9,1)),new Intl.DateTimeFormat(undefined,options).format(new Date(2026,9,1)));
+});
+test("event day helpers distinguish UTC all-day dates and local timed dates",()=>{
+    const local=new Date(2026,9,16,23,30);
+    assertEqual(E.dayKeyLocal(local),'2026-10-16');
+    assertEqual(E.dayKeyUtc(new Date(Date.UTC(2026,9,16,23,30))),'2026-10-16');
+    const all={start:Date.UTC(2026,9,16),end:Date.UTC(2026,9,18),allDay:true};
+    assertEqual(E.dayOfEventStart(all),'2026-10-16');assertEqual(E.dayOfEventEnd(all),'2026-10-17');
+    const timed={start:local.getTime(),end:new Date(2026,9,17).getTime(),allDay:false};
+    assertEqual(E.dayOfEventStart(timed),'2026-10-16');assertEqual(E.dayOfEventEnd(timed),'2026-10-16');
+    assertEqual(E.dayOfEventEnd({...timed,end:timed.start}),'2026-10-16');
 });
 
 /* ------------------------------------------------------------------ *

@@ -21,6 +21,7 @@ OUT=$(realpath -m -- "$OUT")
 CAPTURE_DIR=$(mktemp -d "$(dirname "$OUT")/.big-calendar-shot.XXXXXX")
 CAPTURE="$CAPTURE_DIR/capture.png"
 TOKEN=$(basename "$CAPTURE_DIR")
+RESTORED=false
 eval_js() {
     gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon \
         --method org.Cinnamon.Eval "$1"
@@ -29,6 +30,10 @@ FIND="const f=imports.ui.deskletManager.definitions.find(x=>x.uuid==='bigCalenda
 restore() {
     local status=$? reply
     trap - EXIT INT TERM
+    if $RESTORED; then
+        rm -rf -- "$CAPTURE_DIR"
+        exit "$status"
+    fi
     if ! reply=$(eval_js "(()=>{$FIND const s=f?.__bcShot;if(!s || s.token!=='$TOKEN')return 'nothing';s.restore();return 'restored';})()"); then
         echo "Could not restore desklet; the in-process recovery timer will retry." >&2
         status=1
@@ -73,6 +78,11 @@ for ((i=0;i<40;i++)); do
     sleep .25
 done
 [[ -s "$CAPTURE" ]] || { echo "Screenshot did not appear" >&2; exit 1; }
+# Restore before publishing. If recovery ran during any part of capture, the
+# token is gone and the image cannot be certified as the staged desklet.
+REPLY=$(eval_js "(()=>{$FIND const s=f?.__bcShot;if(!s || s.token!=='$TOKEN')return 'nothing';s.restore();return 'restored';})()")
+[[ "$REPLY" == "(true, "* && "$REPLY" == *'"restored"'* ]] || { echo "Capture expired or restoration failed; no screenshot published." >&2; exit 1; }
+RESTORED=true
 # Both files are on the same filesystem. A hard link refuses a destination
 # created by someone else since the initial check, without a check/write race.
 ln -- "$CAPTURE" "$OUT"

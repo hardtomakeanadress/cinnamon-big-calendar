@@ -100,7 +100,7 @@ sha256sum -c bigCalendar@adis.zip.sha256
 
 From a checkout of the source the same script does the same thing, and
 `./deploy.sh` uses that same installer. Both reload the running desklet so an
-edit takes effect without restarting Cinnamon. Updates retain a hidden backup
+edit takes effect without restarting Cinnamon. Successful updates retain only the most recent hidden backup
 beside the installation and honor `XDG_DATA_HOME` when set. `./deploy.sh --disable` removes it.
 
 **To take it off the desktop and put it back**, right-click it and choose
@@ -313,6 +313,37 @@ These are real and worth knowing before you rely on the desklet.
 
 ## Development
 
+Run the offline suite with one command:
+
+```sh
+python3 tests/run.py
+```
+
+The runner reports each suite and an aggregate **PASS / FAIL / SKIP** summary.
+Exit status is **0** for complete success, **1** for any failure (including a
+native crash), and **77** when verification is incomplete because a required
+environment is unavailable. A skipped test never counts as a pass. Calendar
+suites also use exit 77 when their GI libraries cannot be imported. Errors
+loading the project's own modules remain failures.
+
+Date suites run in UTC, Europe/Bucharest, America/New_York and America/Goose_Bay.
+The last zone exercises the historical midnight rollback fixture; Bucharest
+exercises the floating recurrence's spring DST transition.
+
+Optional suites require their respective environments:
+
+```sh
+python3 tests/run.py --gui        # temporary GTK controls and real St label measurement
+python3 tests/run.py --isolated   # synthetic events in a private EDS profile
+python3 tests/run.py --live       # read the current user's calendar profile
+```
+
+Options can be combined. Omitted optional suites are marked **NOT REQUESTED**.
+The offline suite uses native GLib timers and synthetic UI/client objects;
+`--gui` adds real themed St measurements without reloading the installed desklet.
+
+Individual suites and developer tools:
+
 ```sh
 cjs -m tests/run-tests.js         # grid, formatting and indexing
 cjs -m tests/timezone.js          # all-day, floating and zoned-event dates
@@ -320,8 +351,12 @@ cjs -m tests/recurrence.js        # repeating-event expansion
 cjs -m tests/feed.js              # connecting, reconnecting and deduplication
 cjs -m tests/refresh.js           # notifications, failures, query queue and rendering
 cjs -m tests/ui.js                # input-region and tooltip regression checks
+cjs -m tests/lifecycle.js         # native timer recovery and teardown
+cjs -m tests/render.js            # synthetic render pipeline and interactions
+cjs -m tests/query.js             # successful connections and recurrence-family fetches
 python3 tests/project.py          # installation, removal, packaging, translations and screenshots in temporary directories
 python3 tests/settings-ui.py     # GTK scroll routing and reset using temporary settings
+python3 tests/theme.py           # real St label widths and hidden counts
 bash tests/isolated-refresh.sh    # real add/edit/delete notifications in a temporary EDS profile
 cjs -m tests/integration.js       # reads the real evolution-data-server on this machine
 ./install.sh --check              # can this machine run the desklet?
@@ -347,7 +382,26 @@ up later.
 `tests/integration.js` is the one that needs the real thing. It prints only calendar/event counts, checks timestamps, and reports failures
 with a nonzero exit status. On the audited CJS/EDS combination it reads correctly
 but currently crashes during native process shutdown; see `audit-report.json`.
-Use the isolated synthetic test for reproducible add/edit/delete checks.
+The isolated synthetic test also previously completed its assertions and exited
+139 during native shutdown. Both runs are failures, not passing integration
+verification. The offline connection/family-query tests cover those paths
+without starting EDS; they do not establish that native EDS teardown is fixed.
+
+### Installer failure handling
+
+The installer validates the enabled-desklet list before replacing files when
+Cinnamon is running. If enabling fails, it restores the previous files. A reload
+failure leaves the new files and recovery backup in place and exits nonzero.
+Translations are installed after enabling succeeds and before reload. The file swap and
+settings update are separate operations, not one atomic transaction.
+
+Unchanged desklet lists are not rewritten. Changed lists are reread before writing,
+with up to five attempts if concurrent changes are detected. GSettings has no
+compare-and-swap here, so a concurrent desktop change between the last read and
+write can still be lost. Avoid adding, removing or moving desklets during an
+installation. Abrupt termination between file renames can still require restoring
+the retained `.previous` directory manually. Successful installs/builds prune older
+backups only after replacement succeeds; failed runs retain recovery material.
 
 ### Reloading while you work
 

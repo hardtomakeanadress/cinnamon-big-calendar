@@ -1,4 +1,5 @@
 {
+  "historical_notice": "Historical audit snapshot, not verification of the current checkout. File hashes and counts below describe the earlier review. Both live and private-profile EDS runs later exited 139 at shutdown and must not count as passing integration tests. See AUDIT.txt and tests/run.py for current verification.",
   "date": "2026-10-14",
   "scope": "Full source project in /home/adis/cinnamon-big-calendar, installed runtime comparison and both generated package forms. This is static review plus targeted execution, not proof that every execution path is bug-free. Unrelated Spices projects and GitHub publication were excluded.",
   "reviewed_file_count": 33,

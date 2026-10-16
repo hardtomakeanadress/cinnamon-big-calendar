@@ -1,123 +1,77 @@
-BIG CALENDAR — FULL PROJECT AUDIT — 14 OCTOBER 2026
+BIG CALENDAR — ISSUE VERIFICATION AND FIXES — 16 OCTOBER 2026
 
-SETTINGS FOLLOW-UP: Big Calendar now uses Cinnamon custom controls to forward
-wheel and smooth-scroll events to the page, preserving native value bindings
-and click/drag/keyboard editing. Numeric/choice setting keys and values are
-unchanged. A visible Behaviour -> Defaults reset button uses Cinnamon’s
-existing reset action. GTK tests use temporary settings and cover sliders,
-numbers, dropdowns, focus, page edges, normal edits and default restoration.
-The installer and both package builders include settingsWidgets.py. This
-module runs only in the settings window; desktop polling is unchanged.
-Cinnamon’s schema upgrade also rejected valid numeric endpoints; a local
-settings subclass now preserves them, verified with 100% opacity. The red
-Configure highlight behind transparent content is suppressed. The requested
-permanent white outline uses the existing border colour/thickness settings,
-with defaults of two pixels and white at 55% opacity; zero hides it.
+This record supersedes the earlier prose audit's inconsistent test counts and
+integration-pass claims. audit-report.json retains the historical audit snapshot;
+its hashes, measurements and counts do not describe this checkout.
 
-REFRESH SETTINGS FOLLOW-UP: Configure -> Events -> Background refresh now has
-presets for 1, 5, 10, 15, 20, 30, 60, 120 and 240 minutes. Five minutes remains
-the default and the user's saved preference. The timer supports one minute,
-bounds invalid settings, and retains asynchronous/coalesced online requests.
-The new regression covers all presets and invalid timer inputs. Refresh (20),
-UI (6) and project (13) checks passed. Live settings-menu selections at one and
-15 minutes rearmed the timer correctly; five minutes was restored afterward.
+SCOPE
+GitHub issues #1–13, verified against source at 01361e4 and Cinnamon's installed
+settings implementation. The update targets the source repository and Cinnamon Spices PR #1913.
+Existing runtime dependencies and architecture are retained.
 
-15 OCTOBER FOLLOW-UP: Disabled calendars remained registered in the live EDS
-service and continued returning cached events. The feed now follows enabled
-and selected sources, checks parent-account enablement, and drops hidden
-connections and cached events. Registry changes trigger the existing update
-path; no polling or dependencies were added. Four new feed regressions pass.
-Live installation verification confirms the disabled calendar's October 15
-event disappeared, the active calendar's separate event remained, and all
-settings (including the five-minute refresh) were preserved.
+CHANGES
+- Failed settings initialization produces a visible startup error. Saved-view
+  operations safely ignore an unready settings object (#7).
+- Settings colours are validated at CSS use sites, preserving valid alpha and
+  falling back to the existing palette. Invalid values are not saved back (#8).
+- Installer diagnostics distinguish an absent Cinnamon executable, an unknown
+  version, missing calendar libraries and an unusable probe runtime (#9).
+- Successful installs and Spices builds retain only their latest recovery copy;
+  failed replacements preserve recovery material (#10).
+- Enabled-list validation precedes replacement; enabling failure rolls back
+  files. Unchanged lists are not rewritten and detected concurrent changes
+  trigger a bounded retry. This is not a compare-and-swap or an atomic
+  file/settings transaction. Reload failures retain the new files and backup
+  and report failure (#11).
+- Screenshots must restore their capture token before publishing. Expiry,
+  missing state and restoration failure cannot report a successful image (#12).
+- tools/click.py is executable as its usage instructions require (#13).
+- A common runner reports suite runs as PASS, FAIL or SKIP, with exit codes
+  0, 1 and 77. Optional GUI/private-EDS/live-EDS suites are explicit opt-ins.
+  An empty live profile reports skip, not successful verification (#4).
+- Offline tests exercise real GLib timer recovery and cancellation, lifecycle
+  cleanup, rendering through synthetic actors, navigation, date helpers,
+  successful calendar connections, recurrence-family batching, moved exceptions
+  and cached results after failures. Date suites use four fixed timezones
+  including a midnight rollback and a spring DST transition (#1–3).
+- Test state is reset per case. The hidden-event regression was already useful
+  (removing its fix makes it fail); coverage now includes actual indexing,
+  slicing and parented measurement. Optional St tests measure real labels in
+  Cinnamon at four scales. Redundant root-null highlight assertion removed (#5).
 
-The expanded private-profile EDS test verifies deselection, calendar disable,
-parent disable and re-enabling, as well as add/edit/delete and moved recurrence.
-All behavioral assertions completed, but the process exited 139 at shutdown.
-Gdb confirms the same native GLib/EDS/GObject/CJS finalization stack described
-below; this integration run is not counted as a passing test. The historical
-limitations about calendar selection below now apply only to a separate
-desklet-specific selector; system calendar selection is respected.
+REPRODUCIBLE VERIFICATION
+    python3 tests/run.py
+    python3 tests/theme.py
+    bash -n install.sh shot.sh tools/make-spice.sh
+    git diff --check
+    # In the cinnamon-spices-desklets checkout:
+    ./validate-spice bigCalendar@adis
 
-FOLLOW-UP: At the user's request, the refresh interval now defaults to five
-minutes and requests online synchronization as well as checking the cache.
-The header refresh button was removed; an optional manual action remains in
-the right-click menu. Three new refresh regressions
-pass. The report below records the preceding audit snapshot (commit 0969c5e);
-its statements about no additional periodic online polling are historical.
+The offline runner passed with no failing or skipped suites. Read its per-suite
+summaries for current assertion counts; timezone repetitions are suite runs, not
+new distinct tests. Project tests install, build and inject failures only in
+temporary directories, with mocked desktop tools. The St theme check passed in
+the Cinnamon session using temporary nonreactive actors, without reloading or
+reparenting the installed desklet. GTK settings and live EDS suites were not
+rerun for this change. The generated submission passes the Spices validator.
 
-Scope: all 33 source/project files, including runtime JavaScript, settings,
-CSS, installer/removal/deployment scripts, packaging, translations, developer
-tools, tests, documentation, images, licence and repository ignore rules.
-audit-report.json records each reviewed file and its SHA-256 hash.
+LOCAL INSTALLATION
+The fixed desklet was installed and reloaded on Cinnamon 6.6.9. Installed
+runtime files match source byte-for-byte. The live instance reports ready,
+settings ready and the new colour-validation method present. The saved settings
+and enabled-desklet entries (including positions) match the pre-install snapshot.
 
-RESULT
-The project-wide review is complete. Confirmed fixes are installed locally.
-No commits, pushes or publication were performed. Settings and other desklets
-were preserved. The previous installation was retained at:
-/home/adis/.local/share/cinnamon/desklets/.bigCalendar@adis.stage.ql5K4T.previous
-
-FIXED
-- Event updates respond to EDS revisions, coalesce work, avoid redundant
-  redraws and recover from failed/slow services. Manual refresh requests sync.
-- Recurrence exceptions, moved occurrences, floating/local dates, all-day
-  defaults, zero-duration boundaries and timezone exclusions were corrected.
-- Hidden-event +N counts, tooltip monitor placement, event-color validation,
-  smooth scrolling, input teardown, localization and locale fallbacks fixed.
-- Installation now stages and validates before replacement, rolls back a
-  failed rename, keeps a backup and rejects malformed enabled-desklet lists.
-- Deployment uses the same installer and verifies Cinnamon's native reload.
-- Translation failures preserve valid installed translations.
-- Failed/interrupted screenshots restore the desklet; existing files are not
-  overwritten. Failed builds preserve the prior release/package.
-- Tests now cover meaningful failure cases; documentation matches behavior.
-
-YOUR OVERLAP/CLICK CONCERN
-Tested on the actual desktop with a covering test window and the real Configure
-window placed over the desklet. Covering windows received clicks; uncovered
-navigation worked; all four Configure tabs activated with real mouse clicks.
-Hover hid when covered and recovered afterward. Menu open/close and two
-reloads passed. Old feeds and timers were released; no duplicate day tooltip
-remained. The current overlap problem was not reproduced, so its working
-input guard was preserved. Late calls cannot re-track a removed instance.
-Screenshot interruption was a confirmed cause of misplaced actors and is fixed.
-
-VERIFICATION
-141 distinct automated checks passed. Date suites also passed in UTC,
-Bucharest, New York, Kiritimati and Havana. Real synthetic EDS add/edit/delete
-and moved-recurring-event tests passed in a private profile. Both release
-forms build; the Spices tree passes Cinnamon's validator. Installed runtime
-files match the audited source. Settings and enabled-desklet positions match
-the pre-install values.
-
-Five unchanged live refreshes: 446.7 ms / 5 redraws before, 185.7 ms / 0 redraws
-after. Largest sampled main-loop gap fell from 70.5 to 21.4 ms. This is a small
-measurement, not a guarantee for every workload. Periodic online polling was
-not increased; no new runtime dependency or architecture was introduced.
-
-UNRESOLVED / LIMITS
-1. The standalone live-calendar test reads successfully but exits 139 during
-   native CJS/EDS shutdown. A minimal script with NO Big Calendar imports also
-   crashes; gdb identifies native GLib/EDS/GObject finalization. This is an
-   external issue and is recorded as a failure, not hidden by the test suite.
-2. RDATE-only schedules, multiple RRULEs, custom VTIMEZONE definitions and
-   THISANDFUTURE overrides are not fully supported. The 5,000-step recurrence
-   limit can omit old/high-frequency series. A different recurrence design
-   needs separate agreement.
-3. Dates outside years 1000–9999, region-specific weekend tinting and individual
-   calendar selection remain limitations. Online events still depend on EDS
-   downloading them; a refresh request is not proof of download completion.
-4. Runtime tested on Cinnamon 6.6.9 / CJS 115.1 / EDS 3.52.3 and one X11 monitor.
-   Other desktop versions, Wayland, physical multi-monitor setups and every
-   provider/settings combination were not exhaustively tested. No GitHub CI
-   workflow exists in this checkout; none was added.
-
-DELEGATION
-The bounded script review took 2m03s and provided a useful checklist. The
-installer implementation attempt took 1m57s, hit its turn limit and produced
-no edits; it was not worthwhile and was completed directly. Reported token
-usage, prior review metrics, estimated supervision and validation are in
-JSON. No measured savings or actual billing is claimed. Pricing research
-stopped at your request.
-
-Detailed evidence, limitations, coverage and checks: audit-report.json
+KNOWN LIMITS
+- Both the historical live-account and private-profile synthetic EDS runs
+  completed behavioral checks but exited 139 during native shutdown. Neither
+  is a passing integration run. The native finalization crash remains unresolved;
+  new offline coverage does not claim to fix it.
+- A settings write racing the installer after its final recheck can still be
+  lost. Abrupt termination between directory renames can require manual restore
+  from a retained recovery copy. Concurrent installers are not serialized.
+- Synthetic render tests do not establish all theme, display or window-manager
+  behavior. The real St check covers label measurement/hidden counts only.
+- Existing recurrence limits remain: RDATE-only/multiple RRULE schedules,
+  custom VTIMEZONE and THISANDFUTURE are not fully supported; the 5,000-step
+  expansion cap can omit old or high-frequency series.
+- No full visual regression was performed.

@@ -2,9 +2,11 @@
  * are printed. Synthetic mutation tests belong in isolated-refresh.sh. */
 import GLib from 'gi://GLib';
 import System from 'system';
-import {listCalendars, CalendarFeed} from '../lib/calendarSource.js';
+import { requireCalendarLibraries } from './require-calendar.js';
+await requireCalendarLibraries();
+const {listCalendars, CalendarFeed} = await import('../lib/calendarSource.js');
 import {buildEventIndex} from '../lib/eventIndex.js';
-let errors = 0;
+let errors = 0, skipped = false;
 let feed = new CalendarFeed(null, () => errors++);
 const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 45, () => {
     printerr('FAIL: live EDS check timed out');
@@ -16,6 +18,7 @@ try {
     const calendars = await listCalendars();
     if (!calendars.length) {
         print('SKIP: no calendars configured');
+        skipped = true;
     } else {
         await feed.open();
         if (!feed.isOpen) throw new Error('No calendars could be connected');
@@ -42,3 +45,5 @@ try {
 const loop = new GLib.MainLoop(null, false);
 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { loop.quit(); return GLib.SOURCE_REMOVE; });
 loop.run();
+
+if (skipped) System.exit(77);

@@ -1,3 +1,4 @@
+import { requireCalendarLibraries } from './require-calendar.js';
 /* Connection-lifecycle tests for the calendar feed.
  *
  *   cjs -m tests/feed.js
@@ -49,18 +50,8 @@ function assertEqual(actual, expected, label) {
 
 let CalendarFeed;
 let dedupeOccurrences;
-try {
-    ({ CalendarFeed, dedupeOccurrences } = await import("../lib/calendarSource.js"));
-} catch (e) {
-    print("");
-    print("  Big Calendar desklet -- feed tests");
-    print("  " + "=".repeat(46));
-    print("");
-    print("  SKIPPED: the calendar libraries are not installed here.");
-    print("  (" + e.message + ")");
-    print("");
-    throw new Error("");
-}
+await requireCalendarLibraries();
+({ CalendarFeed, dedupeOccurrences } = await import("../lib/calendarSource.js"));
 
 /** A feed whose connection attempts are scripted, one per open() call. */
 function scriptedFeed(attempts) {

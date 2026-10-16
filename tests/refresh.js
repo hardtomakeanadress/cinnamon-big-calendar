@@ -2,7 +2,9 @@
  * Run: cjs -m tests/refresh.js */
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { CalendarFeed, calendarCall } from '../lib/calendarSource.js';
+import { requireCalendarLibraries } from './require-calendar.js';
+await requireCalendarLibraries();
+const { CalendarFeed, calendarCall } = await import('../lib/calendarSource.js');
 import * as index from '../lib/eventIndex.js';
 import * as utils from '../lib/calendarUtils.js';
 
@@ -122,6 +124,7 @@ await test('settings upgrades preserve valid numeric endpoints without changing 
     const checked=[];
     class NativeSettings {
         constructor() {
+            this.isReady = true;
             for (const type of ['scale','spinbutton']) {
                 for (const value of [0,100,50,-1,101,NaN,'100'])
                     checked.push(this._checkSanity(value,{type,min:0,max:100}));
@@ -178,7 +181,9 @@ await test('startup recovery is armed before registry opening and feed is not du
 await test('failed module loading does not arm a timer that dereferences null', async () => {
     const d=desklet(null);d._utils=null;
     d._timerAlive=()=>{throw new Error('timer should not be examined');};
+    d._dayTimer=0;
     d._startDayTimer();
+    assert(d._dayTimer===0, 'failed bootstrap armed a day timer');
 });
 await test('smooth touchpad events accumulate while horizontal scrolling propagates', async () => {
     const d=desklet(null);d.mouseWheelNavigation=true;const moved=[];d._shiftMonth=n=>moved.push(n);
