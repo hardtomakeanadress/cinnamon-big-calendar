@@ -198,6 +198,19 @@ test("a zoned series keeps its wall-clock time across a DST change", () => {
     ], "09:00 local every week");
 });
 
+test("a prefixed three-part zone is honoured by recurrence and EXDATE", () => {
+    const tz = "/freeassociation.sourceforge.net/Tzfile/America/Argentina/Buenos_Aires";
+    const events = feed._toEvents(component(
+        "DTSTART;TZID=" + tz + ":20260901T233000",
+        "DTEND;TZID=" + tz + ":20260902T003000",
+        "RRULE:FREQ=DAILY;COUNT=3",
+        "EXDATE;TZID=" + tz + ":20260902T233000"),
+        ENTRY, ...SEPTEMBER, new Map());
+    assertEqual(events.map(e => new Date(e.start).toISOString()),
+        ["2026-09-02T02:30:00.000Z", "2026-09-04T02:30:00.000Z"], "excluded local occurrence");
+    assertEqual(events.map(e => (e.end - e.start) / 60000), [60, 60], "duration preserved");
+});
+
 /* ---------------------------------------------------------------- *
  * What must not change
  * ---------------------------------------------------------------- */

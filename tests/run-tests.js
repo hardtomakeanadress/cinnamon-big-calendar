@@ -270,6 +270,17 @@ test("month grid always starts on the configured weekday", () => {
     }
 });
 
+test("ISO row labels follow Thursday for every configured week start", () => {
+    for (const first of [0, 1, 6]) {
+        const september = C.buildMonthMatrix(2026, 8, first, { weekNumbering: "iso" });
+        assertEqual(september[0].week, { week: 36, year: 2026 }, "September first=" + first);
+        const january = C.buildMonthMatrix(2026, 0, first, { weekNumbering: "iso" });
+        assertEqual(january.slice(0, 3).map(r => r.week), [
+            { week: 1, year: 2026 }, { week: 2, year: 2026 }, { week: 3, year: 2026 }
+        ], "New Year first=" + first);
+    }
+});
+
 test("month grid contains every day of the month exactly once", () => {
     for (let y = 2024; y <= 2028; y++) {
         for (let mo = 0; mo < 12; mo++) {

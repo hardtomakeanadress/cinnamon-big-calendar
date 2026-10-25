@@ -35,6 +35,29 @@ await test('old instance teardown preserves replacement settings registration',a
     let disconnected=0;d.settings={uuid:'x',instanceId:1,bindings:{},disconnectAll:()=>disconnected++};
     main.settingsManager.uuids.x={1:{replacement:true}};d.on_desklet_removed();equal(removed,[]);equal(disconnected,1);
 });
+await test('missing settings registry still releases local bindings',async({d,main,removed})=>{
+    let unbound=0,disconnected=0;
+    d.settings={uuid:'missing',instanceId:1,bindings:{a:1},unbindAll:()=>unbound++,disconnectAll:()=>disconnected++};
+    main.settingsManager.unregister=()=>{throw new Error('missing UUID registry');};
+    d.on_desklet_removed();equal([unbound,disconnected],[1,1]);equal(removed,[]);
+});
+await test('input timer restores a detached watchdog',async({d})=>{
+    d._syncInputRegion=()=>{};d._clearStuckFlashspot=()=>{};d._startInputTimer();
+    const old=d._inputWatchdog;GLib.source_remove(old);await delay(30);
+    assert(d._inputWatchdog!==old&&d._timerAlive('_inputWatchdog'),'watchdog was not restored');
+});
+await test('system settings changes refresh only automatic choices and disconnect on removal',async({d})=>{
+    const callbacks=new Map();let next=0,renders=0,reads=0,disconnects=0;
+    d._interfaceSettings={connect:(name,cb)=>{callbacks.set(name,cb);return ++next;},disconnect:()=>disconnects++};
+    d._render=()=>renders++;d._refreshEventsSoon=()=>reads++;
+    d.weekStartSetting='auto';d.eventTimeFormat='auto';d._watchSystemSettings();d._watchSystemSettings();equal(next,2);
+    callbacks.get('changed::first-day-of-week')();callbacks.get('changed::clock-use-24h')();equal([renders,reads],[2,1]);
+    d.weekStartSetting='monday';d.eventTimeFormat='24';
+    callbacks.get('changed::first-day-of-week')();callbacks.get('changed::clock-use-24h')();equal([renders,reads],[2,1]);
+    d.on_desklet_removed();equal(disconnects,2);
+    d.weekStartSetting='auto';d.eventTimeFormat='auto';
+    callbacks.get('changed::first-day-of-week')();callbacks.get('changed::clock-use-24h')();equal([renders,reads],[2,1]);
+});
 await test('turning events off cancels queries, timers and cached events',async({d})=>{
     let closed=0;d._feed={destroy(){closed++;}};d._startEventTimer();const id=d._eventTimer;
     d._eventIndex={old:[1]};d.showEvents=false;d._openOrCloseFeed();
@@ -46,5 +69,11 @@ await test('failed settings initialization shows fallback and starts no timers',
     d._ready=false;await d._bootstrap();
     equal(d.content.text,'Big Calendar could not start.');assert(!d._ready&&ids.size===0&&logs.length>=1);
     d.startOnToday=false;d._restoreView();d._rememberView(); // Safe after failed initialization.
+});
+await test('UI startup failure is caught and displayed',async({d,logs})=>{
+    d._ready=false;d._bindSettings=()=>{d.settings={isReady:true};};d._restoreView=()=>{};
+    d._buildUi=()=>{throw new Error('UI failure');};await d._bootstrap();
+    equal(d.content.text,'Big Calendar could not start.');assert(!d._ready&&logs.some(e=>e.message==='UI failure'));
+    assert(!d._timerAlive('_dayTimer')&&!d._timerAlive('_eventTimer'));
 });
 print('Lifecycle tests passed: '+passed);

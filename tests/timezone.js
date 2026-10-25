@@ -119,6 +119,15 @@ test("an unknown TZID falls back instead of throwing", () => {
         "2026-02-14T08:00:00.000Z", "unknown zone falls back to UTC reading");
 });
 
+test("prefixed three-part TZIDs preserve their full timezone name", () => {
+    for (const prefix of ["", "/freeassociation.sourceforge.net/Tzfile/"]) {
+        assertEqual(startOf("DTSTART;TZID=" + prefix + "America/Argentina/Buenos_Aires:20260214T080000"),
+            "2026-02-14T11:00:00.000Z", prefix || "plain zone");
+        assertEqual(startOf("DTSTART;TZID=" + prefix + "America/Indiana/Indianapolis:20260214T080000"),
+            "2026-02-14T13:00:00.000Z", "Indiana winter");
+    }
+});
+
 test("DTEND is converted with the same zone as DTSTART", () => {
     const events = eventsOf("DTSTART;TZID=Europe/Bucharest:20260214T080000",
         "DTEND;TZID=Europe/Bucharest:20260214T093000");

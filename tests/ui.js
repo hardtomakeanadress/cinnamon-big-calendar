@@ -49,9 +49,16 @@ test('only invisible overlapping flashspots are hidden',()=>{
 });
 test('tooltip placement follows pointer monitor, not its previous position',()=>{
     const t=Object.create(Tip.prototype);t._pointer=[2100,200];let pos;
-    t._actor={get_preferred_width:()=>[200,200],get_preferred_height:()=>[100,100],set_position:(...p)=>pos=p};
+    t._actor={set_size(){},set_width(){},set_height(){},get_preferred_width:()=>[200,200],get_preferred_height:()=>[100,100],set_position:(...p)=>pos=p};
     t._place();assert(pos[0]>=1920&&pos[0]+200<=3840,'wrong monitor');
     t._pointer=[3835,1075];t._place();assert(pos[0]+200<=3840&&pos[1]+100<=1080,'tooltip overflow');
+});
+test('oversized tooltip is bounded by its monitor and resets size between placements',()=>{
+    const t=Object.create(Tip.prototype);t._pointer=[3835,1075];let width,height,pos,resets=0;
+    t._actor={set_size(w,h){assert(w===-1&&h===-1,'stale size');resets++;},set_width:w=>width=w,set_height:h=>height=h,
+        get_preferred_width:()=>[0,9157],get_preferred_height:()=>[0,3000],set_position:(...p)=>pos=p};
+    t._place();assert(width===1920&&height===1080&&pos[0]===1920&&pos[1]===0,'tooltip escaped monitor');
+    t._pointer=[100,100];t._place();assert(resets===2&&pos[0]===0,'previous monitor size retained');
 });
 test('editing highlight does not put a colored fill behind transparent content', () => {
     const d=Object.create(DeskletClass.prototype);

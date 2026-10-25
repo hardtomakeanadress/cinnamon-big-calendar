@@ -33,6 +33,30 @@ test('all settings colour sinks reject CSS declarations and preserve valid alpha
     d._applyRootStyle();assert(d._root.style.includes('rgba(10,20,30,0.25)'));
     equal(d._withAlpha('bad; injected:12345',.5),'rgba(255, 255, 255, 0.50)');
 });
+test('numeric CSS settings use bounded numbers when configuration is malformed',({d})=>{
+    for(const prop of ['cornerRadius','outerPadding','borderWidth','cellRadius','fontScale'])d[prop]='1; injected:12345';
+    d._render();
+    assert(![d._root,...descendants(d._table)].some(a=>/injected|NaN|Infinity/.test(a.style||'')));
+    assert(d._root.style.includes('border-radius: 14px')&&d._root.style.includes('padding: 16px'));
+    d.cornerRadius=Infinity;d.outerPadding=-5;d.borderWidth=100;d._applyRootStyle();
+    assert(d._root.style.includes('border-radius: 14px')&&d._root.style.includes('padding: 0px')&&d._root.style.includes('0 0 0 10px'));
+});
+test('grid borders belong to full cells, including headings and week numbers',({d})=>{
+    d.showGridLines=true;d.showWeekNumbers=true;d.weekNumbering='iso';d._render();
+    assert(d._table.children.every(a=>a.style.includes('border: 1px solid')));
+    for(const cell of d._table.children.filter(a=>a.style_class==='bigcal-cell')){
+        assert(cell.layout.x_fill&&cell.layout.y_fill);
+        assert(!cell.children[0].children[0].style.includes('border: 1px'));
+    }
+    d.showGridLines=false;d._render();assert(d._table.children.every(a=>!a.style.includes('border: 1px')));
+});
+test('title labels leave room for cell padding and optional grid borders',({d})=>{
+    d.eventStyle='titles';d._entriesFor=()=>[{event:{summary:'Long meeting',allDay:true}}];
+    for(const grid of [false,true]){
+        d.showGridLines=grid;const cell=d._makeDayCell({year:2026,month:9,day:16,inMonth:true});
+        equal(cell.children[1].children[0].width,cell.width-8-(grid?2:0));
+    }
+});
 test('hidden-event count uses real indexing, slicing and parented width measurement',({d})=>{
     const cell={year:2026,month:9,day:16};const event={summary:'Meeting',color:'#ff0000',allDay:true,start:Date.UTC(2026,9,16),end:Date.UTC(2026,9,17)};
     d._eventIndex=d._index.buildEventIndex([event,{...event,summary:'Two'},{...event,summary:'Three'}]);
