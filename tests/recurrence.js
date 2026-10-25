@@ -232,6 +232,19 @@ test("EXDATE with its own TZID is compared at the correct instant", () => {
         ["2026-09-01", "2026-09-15"], "zoned exclusion");
 });
 
+test("a prefixed three-component zone applies to recurrence and EXDATE", () => {
+    const zone = "/freeassociation.sourceforge.net/Tzfile/America/Argentina/Buenos_Aires";
+    const events = feed._toEvents(component(
+        "DTSTART;TZID=" + zone + ":20260901T080000",
+        "DTEND;TZID=" + zone + ":20260901T090000",
+        "RRULE:FREQ=WEEKLY;COUNT=3",
+        "EXDATE;TZID=" + zone + ":20260908T080000"
+    ), ENTRY, ...SEPTEMBER, new Map());
+    assertEqual(events.map(event => new Date(event.start).toISOString()).sort(),
+        ["2026-09-01T11:00:00.000Z", "2026-09-15T11:00:00.000Z"],
+        "the zone is retained in the series and its excluded occurrence");
+});
+
 test("UTC EXDATE excludes the same instant in a zoned series", () => {
     assertEqual(days(["DTSTART;TZID=Europe/Bucharest:20260901T090000",
         "DTEND;TZID=Europe/Bucharest:20260901T100000", "RRULE:FREQ=WEEKLY;COUNT=3",
