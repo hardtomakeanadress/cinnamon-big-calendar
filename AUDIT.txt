@@ -1,3 +1,46 @@
+BIG CALENDAR — RE-AUDIT — 14 NOVEMBER 2026
+
+Reviewed runtime source at 8230ea7, the existing regression coverage, packaging,
+and Cinnamon's installed desklet/settings implementation. Both working trees
+were initially clean. Remote source main already contained 8230ea7, but the
+Cinnamon Spices submission branch and PR #1913 were still at 89f600ef. The
+submitted desklet.js, calendarSource.js and calendarUtils.js matched the older
+cbcb7b6 source, so the latest runtime fixes had not reached the submission.
+
+The re-audit covered startup/error handling, settings and CSS validation,
+rendering/tooltip bounds, date and recurrence calculations, refresh queuing,
+calendar connection/cache recovery, input handling and removal cleanup. No
+additional runtime defect was confirmed in this scope. A native ECal probe
+also confirmed that get_dtend() resolves DURATION for single and recurring
+events; no extra duration-handling code was needed.
+
+VERIFICATION
+- python3 tests/run.py: PASS=19, FAIL=0, SKIP=0 suite runs. The project suite
+  includes 24 passing tests. GUI/private-EDS/live-EDS suites are separate opt-ins.
+- python3 tests/theme.py: passed real St label measurement, cell borders,
+  title allocation and tooltip bounds at 50%, 100%, 200% and 400% scale.
+- python3 tests/settings-ui.py: passed wheel/touchpad scrolling, deliberate
+  setting changes and reset-to-defaults using a temporary settings file.
+- ./tools/make-spice.sh: rebuilt the submission using the existing packager.
+- Copied the generated submission into the Cinnamon Spices checkout; only
+  the three runtime files named above differed from the previous submission.
+- ./validate-spice bigCalendar@adis: no errors.
+- git diff --check: passed for the submission.
+
+The submission now includes 8230ea7's tooltip bounds, grid/title layout,
+numeric style bounds, system clock/week-start monitoring, timer/settings
+cleanup, ISO week labels and prefixed three-part timezone fixes. Runtime
+payloads are compared byte-for-byte before publication.
+
+No new dependencies, rewiring or architecture changes were introduced. The
+installed desklet was not replaced or reloaded during this re-audit. This is
+not a new live-account or isolated-EDS integration pass: the historical native
+shutdown crash and recurrence limitations listed below remain unresolved.
+Approval of GitHub's upstream validation workflow remains a maintainer action;
+local validation does not replace it.
+
+--------------------------------------------------------------------------
+
 BIG CALENDAR — ISSUE VERIFICATION AND FIXES — 16 OCTOBER 2026
 
 This record supersedes the earlier prose audit's inconsistent test counts and
